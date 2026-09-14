@@ -1,0 +1,59 @@
+# CMake build
+build/
+Build/
+build-*/
+cmake-build-*/
+out/
+bin/
+lib/
+
+# CMake cache and intermediate files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# CLion / JetBrains
+.idea/
+
+# Visual Studio
+.vs/
+*.user
+*.userosv
+*.sln
+*.vcxproj
+*.vcxproj.filters
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+
+# Compiled files and binary files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.elf
+*.out
+
+# System / OS
+.DS_Store
+Thumbs.db
