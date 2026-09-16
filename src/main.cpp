@@ -35,22 +35,10 @@ int main(int argc, char* argv[]) {
     bool is_running = true;
   
     PhysicsWorld world;
+    Application application;
     
-    int w, h;
-    SDL_GetWindowSize(window, &w, &h);
-    
-    // Small object for debug (check contact info).
-    // world.CreateCircle(Vec2{0.f, 0.f}, 0.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 0.2f, 1.f); // Small ball.
-    // world.CreateBox(Vec2{0, 0 } * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f); // Small box.
-
-    // Floating obstacle objects.
-    world.CreateCircle(Vec2{static_cast<float>(w) / 2.f + 200, static_cast<float>(h) / 2.f } * physics_config::kMpp, 0.0f, {0.f, 0.f}, 0.5f, 0.f, 2.f, 0.2f, 1.f); // Big ball.
-    world.CreateBox(Vec2{static_cast<float>(w) / 2.f - 500.f, static_cast<float>(h) / 2.f } * physics_config::kMpp, 0.0f, {0.f, 0.f}, 0.5f, 0.f, 3.f, 3.f, 0.5f, 0.5f); // Big box.
-    
-    // Floor, Left wall, Right wall.
-    world.CreateBox(Vec2{static_cast<float>(w) / 2.f, 50.f } * physics_config::kMpp, 0.f, {0.f, 0.f}, 0.0f, 0.f, static_cast<float>(w) / 2 * physics_config::kMpp, 1.f, 0.5f, 1.f);
-    world.CreateBox(Vec2{50, static_cast<float>(h) / 2.f } * physics_config::kMpp, 0.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, static_cast<float>(h) / 2 * physics_config::kMpp, 0.5f, 1.f);
-    world.CreateBox(Vec2{static_cast<float>(w) - 50, static_cast<float>(h) / 2.f } * physics_config::kMpp, 0.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, static_cast<float>(h) / 2 * physics_config::kMpp, 0.5f, 1.f);
+    // Create floor, walls and floating obstacles.
+    application.CreateInitialObjects(window, world);
     
     Uint64 last_time = SDL_GetPerformanceCounter();
     // Game Loop.
@@ -59,9 +47,9 @@ int main(int argc, char* argv[]) {
         const float delta_time = static_cast<float>(current_time - last_time) / static_cast<float>(SDL_GetPerformanceFrequency());
         last_time = current_time;
         
-        Application::Input(window, is_running, world);
-        Application::Update(world, delta_time);
-        Application::Render(renderer, window, world);
+        application.Input(window, is_running, world);
+        application.Update(world, delta_time);
+        application.Render(renderer, window, world);
     }
     
     // Quit.

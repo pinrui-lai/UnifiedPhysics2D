@@ -29,7 +29,10 @@ void CollisionSystem::SolveCollision(PhysicsWorld& world)
             {
                 if (contact.has_value())
                 {
-                    world.debug_contacts_.push_back(*contact);
+                    if (world.show_debug_contact_points_)
+                    {
+                        world.debug_contacts_.push_back(*contact);    
+                    }
                     contacts.push_back(*contact);
                 }
             }
@@ -261,19 +264,23 @@ std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(P
         {
             // Decide incident edge and reference edge.
             std::array<Vec2, 2> edge_a;
-            float dot_a;
-            GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_a, dot_a);
+            float edge_a_dot_normal;
+            GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_a, edge_a_dot_normal);
             
             std::array<Vec2, 2> edge_b;
-            float dot_b;
-            GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_b, dot_b);
+            float edge_b_dot_normal;
+            GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_b, edge_b_dot_normal);
             
-            const bool is_ref_a = dot_a > dot_b;
-            const std::array<Vec2, 2> reference_edge = dot_a > dot_b ? edge_a : edge_b;
-            const std::array<Vec2, 2> incident_edge = dot_a > dot_b ? edge_b : edge_a;
+            const bool is_ref_a = edge_a_dot_normal > edge_b_dot_normal;
+            const std::array<Vec2, 2> reference_edge = edge_a_dot_normal > edge_b_dot_normal ? edge_a : edge_b;
+            const std::array<Vec2, 2> incident_edge = edge_a_dot_normal > edge_b_dot_normal ? edge_b : edge_a;
             
-            world.debug_incident_edges_.push_back(incident_edge);
-            world.debug_reference_edges_.push_back(reference_edge);
+            if (world.show_debug_clipping_)
+            {
+                world.debug_incident_edges_.push_back(incident_edge);
+                world.debug_reference_edges_.push_back(reference_edge);
+                
+            }
             
             // Clip incident edge.
             std::array<Vec2, 2> clipped_incident_edge = incident_edge;
@@ -297,7 +304,7 @@ std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(P
             const int primary_idx   = is_a_deeper ? 0 : 1;
             const int secondary_idx = 1 - primary_idx;
 
-            // According to incident_edge, set collision_point_a and collision_point_a.
+            // According to incident_edge, set collision_point_a and collision_point_b.
             auto assign_collision_points = [&](Contact& target_contact, const auto& point) {
                 Vec2& primary_pt   = (!is_ref_a) ? target_contact.collision_point_a : target_contact.collision_point_b;
                 Vec2& secondary_pt = (!is_ref_a) ? target_contact.collision_point_b : target_contact.collision_point_a;

@@ -41,7 +41,12 @@ public:
     std::vector<Vec2>& GetVertices() { return vertices_; }
     
     void SetPosition(BodyHandle handle, const Vec2& pos);
+    void SetAngularVelocity(BodyHandle handle, float angular_vel);
+    void SetRestitution(BodyHandle handle, float restitution);
+    void SetFriction(BodyHandle handle, float friction);
     
+    bool show_debug_contact_points_ = true;
+    bool show_debug_clipping_ = true;
     std::vector<Contact> debug_contacts_;
     std::vector<std::array<Vec2, 2>> debug_incident_edges_;
     std::vector<std::array<Vec2, 2>> debug_reference_edges_;

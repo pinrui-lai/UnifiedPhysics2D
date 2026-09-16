@@ -38,8 +38,8 @@ void MovementSystem::IntegratePosition(PhysicsWorld& world, const float dt)
 
 void MovementSystem::ApplyGravity(PhysicsWorld& world)
 {
-    std::for_each(std::execution::par_unseq, world.rigid_bodies_.begin(), world.rigid_bodies_.end(), [&](auto& rigid_body)
+    for (auto& rigid_body : world.rigid_bodies_)
     {
         rigid_body.force += Vec2{0.0f, world.gravity_} * rigid_body.mass;
-    });
+    }
 }

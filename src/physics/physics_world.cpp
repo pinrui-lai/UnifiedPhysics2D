@@ -2,7 +2,7 @@
 
 BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float inertia, float restitution, float friction)
 {
-    size_t new_id = positions_.size();
+    const size_t new_id = positions_.size();
     
     positions_.emplace_back(pos);
     rotations_.emplace_back(rotation);
@@ -18,14 +18,14 @@ BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2&
     return {new_id};
 }
 
-BodyHandle PhysicsWorld::CreateCircle(const Vec2& pos, float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float radius, const float restitution, const float friction)
+BodyHandle PhysicsWorld::CreateCircle(const Vec2& pos, const float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float radius, const float restitution, const float friction)
 {
     shapes_.push_back(CircleShape{radius});
     float inertia = 0.5f * mass * radius * radius;
     return CreateBody(pos, rotation, velocity, angular_velocity, mass, inertia, restitution, friction);
 }
 
-BodyHandle PhysicsWorld::CreateBox(const Vec2& pos, float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float half_width, const float half_height, const float restitution, const float friction)
+BodyHandle PhysicsWorld::CreateBox(const Vec2& pos, const float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float half_width, const float half_height, const float restitution, const float friction)
 {
     shapes_.push_back(BoxShape{half_width, half_height});
     const float width = half_width * 2;
@@ -34,7 +34,7 @@ BodyHandle PhysicsWorld::CreateBox(const Vec2& pos, float rotation, const Vec2& 
     return CreateBody(pos, rotation, velocity, angular_velocity, mass, inertia, restitution, friction);
 }
 
-BodyHandle PhysicsWorld::CreatePolygon(const Vec2& pos, float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const std::vector<Vec2>& vertices, const float restitution, const float friction)
+BodyHandle PhysicsWorld::CreatePolygon(const Vec2& pos, const float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const std::vector<Vec2>& vertices, const float restitution, const float friction)
 {
     shapes_.push_back(PolygonShape(vertices_.size(), vertices.size()));
     return CreateBody(pos, rotation, velocity, angular_velocity, mass, 1, restitution, friction);
@@ -48,4 +48,19 @@ void PhysicsWorld::ApplyForce(const BodyHandle handle, const Vec2& force)
 void PhysicsWorld::SetPosition(const BodyHandle handle, const Vec2& pos)
 {
     positions_[handle.id].val = pos;
+}
+
+void PhysicsWorld::SetAngularVelocity(const BodyHandle handle, const float angular_vel)
+{
+    angular_velocities_[handle.id].val = angular_vel;
+}
+
+void PhysicsWorld::SetRestitution(const BodyHandle handle, const float restitution)
+{
+    rigid_bodies_[handle.id].restitution = restitution;
+}
+
+void PhysicsWorld::SetFriction(const BodyHandle handle, const float friction)
+{
+    rigid_bodies_[handle.id].friction = friction;
 }
