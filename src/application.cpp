@@ -21,16 +21,16 @@ void Application::CreateInitialObjects(SDL_Window* window, PhysicsWorld& world)
     // debug_box_ = world.CreateBox(Vec2{0, 0 } * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f);
 
     // Floating obstacle objects.
-    const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
-    floating_circle_ = world.CreateCircle(floating_circle_pos, 0.0f,
-        {0.f, 0.f}, floating_objects_angular_vel_,
-        0.f, 2.f, floating_objects_restitution_, floating_objects_friction_);
-    
-    const Vec2 floating_box_pos = Vec2{static_cast<float>(w) / 4.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
-    floating_box_ = world.CreateBox(floating_box_pos, 0.0f,
-        {0.f, 0.f}, floating_objects_angular_vel_,
-        0.f, 2.5f, 2.5f, floating_objects_restitution_, floating_objects_friction_);
-    
+    // const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    // floating_circle_ = world.CreateCircle(floating_circle_pos, 0.0f,
+    //     {0.f, 0.f}, floating_objects_angular_vel_,
+    //     0.f, 2.f, floating_objects_restitution_, floating_objects_friction_);
+    //
+    // const Vec2 floating_box_pos = Vec2{static_cast<float>(w) / 4.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    // floating_box_ = world.CreateBox(floating_box_pos, 0.0f,
+    //     {0.f, 0.f}, floating_objects_angular_vel_,
+    //     0.f, 2.5f, 2.5f, floating_objects_restitution_, floating_objects_friction_);
+    //
     const Vec2 floating_wide_box_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_wide_box_1_ = world.CreateBox(floating_wide_box_pos, 0.0f,
         {0.f, 0.f}, floating_objects_angular_vel_,
@@ -40,7 +40,12 @@ void Application::CreateInitialObjects(SDL_Window* window, PhysicsWorld& world)
         {0.f, 0.f}, floating_objects_angular_vel_,
         0.f, 3.5f, 0.4f, floating_objects_restitution_, floating_objects_friction_);
     
-    // Floor, Left wall, Right wall.
+    // Ceil, Floor, Left wall, Right wall.
+    const Vec2 ceil_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) } * physics_config::kMpp;
+    floor_ = world.CreateBox(ceil_pos, 0.f,
+        {0.f, 0.f}, 0.0f,
+        0.f, static_cast<float>(w) / 2 * physics_config::kMpp, 1.f, boundary_restitution_, boundary_friction_);
+    
     const Vec2 floor_pos = Vec2{static_cast<float>(w) / 2.f, 50.f } * physics_config::kMpp;
     floor_ = world.CreateBox(floor_pos, 0.f,
         {0.f, 0.f}, 0.0f,
@@ -225,18 +230,6 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
             }, shapes[i]);
     }
     
-    for (const auto& contact : world.debug_contacts_)
-    {
-        ImVec2 pt_a(contact.collision_point_a.x * physics_config::kPpm, float_h - contact.collision_point_a.y * physics_config::kPpm);
-        ImVec2 pt_b(contact.collision_point_b.x * physics_config::kPpm, float_h - contact.collision_point_b.y * physics_config::kPpm);
-        
-        // Line collision_point_a to collision_point_b.
-        draw_list->AddLine(pt_a, pt_b, IM_COL32(255, 255, 0, 255), 5.0f);
-     
-        // Draw collision point a.
-        draw_list->AddCircleFilled(pt_a, 5.0f, IM_COL32(0, 255, 0, 255));
-    }
-    
     for (const auto& incident_edge : world.debug_incident_edges_)
     {
         ImVec2 p0(incident_edge[0].x * physics_config::kPpm, float_h - incident_edge[0].y * physics_config::kPpm);
@@ -251,6 +244,30 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         draw_list->AddLine(p0, p1, IM_COL32(0, 255, 255, 255), 5.0f);
     }
     
+    if (world.show_debug_contact_points_)
+    {
+        for (const auto& manifold : world.GetManifolds())
+        {
+            if (manifold.contact_count == 0) continue;
+        
+            for (size_t i = 0; i < manifold.contact_count; ++i)
+            {
+                ImVec2 pt_a(manifold.contacts[i].collision_point_a.x * physics_config::kPpm, float_h - manifold.contacts[i].collision_point_a.y * physics_config::kPpm);
+                ImVec2 pt_b(manifold.contacts[i].collision_point_b.x * physics_config::kPpm, float_h - manifold.contacts[i].collision_point_b.y * physics_config::kPpm);
+        
+                // Line collision_point_a to collision_point_b.
+                draw_list->AddLine(pt_a, pt_b, IM_COL32(255, 255, 0, 255), 5.0f);
+            
+                // Draw collision point a.
+                draw_list->AddCircleFilled(pt_a, 5.0f, IM_COL32(0, 255, 0, 255));
+            }
+        }    
+    }
+    
+    if (!world.GetBvhNodes().empty() && draw_bvh_) {
+        RenderBvhDebug(world.GetBvhNodes(), 0, bvh_draw_max_depth_, float_h);
+    }
+    
     ImGui::Render();
     SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
     SDL_RenderClear(renderer);
@@ -263,7 +280,8 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
 {
     ImGui::Begin("Physics Engine Control");
     
-    ImGui::Text("Current FPS: %.1f", ImGui::GetIO().Framerate);
+    ImGui::Text("Current FPS: %.1f\nNum Objects: %d, Num Manifolds: %d",
+        ImGui::GetIO().Framerate, world.GetPositions().size(), world.GetManifolds().size());
     ImGui::Separator();
     
     ImGui::Text("Boundaries:");
@@ -322,23 +340,114 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
     ImGui::Separator();
     
     ImGui::Text("Next Spawned Circle (Left Mouse Button):");
-    if (ImGui::SliderFloat("Mass##c", &circle_spawn_mass_, 0.0f, 20.0f)) {}
-    if (ImGui::SliderFloat("Radius##c", &circle_spawn_radius_, 0.5f, 3.0f)) {}
-    if (ImGui::SliderFloat("Restitution##c", &circle_spawn_restitution_, 0.0f, 1.0f)) {}
-    if (ImGui::SliderFloat("friction##c", &circle_spawn_friction_, 0.0f, 1.0f)) {}
+    ImGui::SliderFloat("Mass##c", &circle_spawn_mass_, 0.0f, 20.0f);
+    ImGui::SliderFloat("Radius##c", &circle_spawn_radius_, 0.5f, 3.0f);
+    ImGui::SliderFloat("Restitution##c", &circle_spawn_restitution_, 0.0f, 1.0f);
+    ImGui::SliderFloat("friction##c", &circle_spawn_friction_, 0.0f, 1.0f);
     ImGui::Separator();
     
     ImGui::Text("Next Spawned Box (Right Mouse Button):");
-    if (ImGui::SliderFloat("Mass##b", &box_spawn_mass_, 0.0f, 20.0f)) {}
-    if (ImGui::SliderFloat("Half-Width##b", &box_spawn_half_width_, 0.1f, 3.0f)) {}
-    if (ImGui::SliderFloat("Half-Height##b", &box_spawn_half_height_, 0.1f, 3.0f)) {}
-    if (ImGui::SliderFloat("Restitution##b", &box_spawn_restitution_, 0.0f, 1.0f)) {}
-    if (ImGui::SliderFloat("friction##b", &box_spawn_friction_, 0.0f, 1.0f)) {}
+    ImGui::SliderFloat("Mass##b", &box_spawn_mass_, 0.0f, 20.0f);
+    ImGui::SliderFloat("Half-Width##b", &box_spawn_half_width_, 0.1f, 3.0f);
+    ImGui::SliderFloat("Half-Height##b", &box_spawn_half_height_, 0.1f, 3.0f);
+    ImGui::SliderFloat("Restitution##b", &box_spawn_restitution_, 0.0f, 1.0f);
+    ImGui::SliderFloat("friction##b", &box_spawn_friction_, 0.0f, 1.0f);
     ImGui::Separator();
     
     ImGui::Text("Debug Options:");
     ImGui::Checkbox("Draw Contact Info", &world.show_debug_contact_points_);
     ImGui::Checkbox("Draw Incident Edge & Reference Edge", &world.show_debug_clipping_);
+    ImGui::Text("BVH :");
+    ImGui::Checkbox("Draw BVH", &draw_bvh_);
+    ImGui::SliderInt("BVH Draw Depth", &bvh_draw_max_depth_, 0, 20);
     
     ImGui::End();
+}
+
+ImU32 Application::GetDepthColor(const int depth, const float alpha)
+{
+    const float hue = std::fmod(0.15f * static_cast<float>(depth), 1.0f); // Each depth has a different color.
+    float r, g, b;
+    ImGui::ColorConvertHSVtoRGB(hue, 0.8f, 0.9f, r, g, b);
+    return ImColor(r, g, b, alpha);
+}
+
+void Application::DrawBvhNode(ImDrawList* draw_list, const std::vector<BvhNode>& nodes, const int node_idx, const int current_depth,
+    const int max_render_depth, int& hovered_node_idx, const float window_height)
+{
+    if (node_idx >= static_cast<int>(nodes.size())) return;
+    if (current_depth > max_render_depth) return;
+
+    const BvhNode& node = nodes[node_idx];
+    
+    // Shrink by depth to avoid border overlap.
+    const float padding = 1.5f * static_cast<float>(current_depth);
+    const ImVec2 p_min = ImVec2(node.aabb.min_x * physics_config::kPpm + padding, window_height - node.aabb.min_y * physics_config::kPpm - padding);
+    const ImVec2 p_max = ImVec2(node.aabb.max_x * physics_config::kPpm - padding, window_height - node.aabb.max_y * physics_config::kPpm + padding);
+    
+    // If the mouse is hovering over the current AABB.
+    ImVec2 mouse_pos = ImGui::GetIO().MousePos;
+    mouse_pos = {mouse_pos.x * physics_config::kMpp, (window_height - mouse_pos.y) * physics_config::kMpp};
+    if (AabbContains(node.aabb, mouse_pos)) {
+        hovered_node_idx = node_idx;
+    }
+
+    // Draw borders and fill with light colors
+    const ImU32 stroke_color = GetDepthColor(current_depth, 0.8f);
+    const ImU32 fill_color   = GetDepthColor(current_depth, 0.05f);
+    
+    draw_list->AddRectFilled(p_min, p_max, fill_color);
+    draw_list->AddRect(p_min, p_max, stroke_color, 0.0f, 0, 1.5f);
+
+    // Recursively draw subtree
+    if (!node.IsLeaf()) {
+        if (node.left_child != std::numeric_limits<size_t>::max())
+        {
+            DrawBvhNode(draw_list, nodes, node.left_child, current_depth + 1, max_render_depth, hovered_node_idx, window_height);
+        }
+        if (node.right_child != std::numeric_limits<size_t>::max())
+        {
+            DrawBvhNode(draw_list, nodes, node.right_child, current_depth + 1, max_render_depth, hovered_node_idx, window_height);    
+        }
+    }
+}
+
+void Application::RenderBvhDebug(const std::vector<BvhNode>& nodes, const int root_idx, const int max_render_depth, const float window_height)
+{
+    ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+    
+    int hovered_node_idx = -1;
+
+    // Draw all AABB.
+    DrawBvhNode(draw_list, nodes, root_idx, 0, max_render_depth, hovered_node_idx, window_height);
+
+    // When the mouse hovers over an AABB, highlight and draw the children connection line.
+    if (hovered_node_idx != -1) {
+        const BvhNode& target = nodes[hovered_node_idx];
+        ImVec2 target_center = GetAabbCenter(target.aabb);
+        target_center = {target_center.x * physics_config::kPpm, window_height - target_center.y * physics_config::kPpm};
+
+        // Highlight the AABB of the current hover (thick yellow border).
+        draw_list->AddRect(
+            ImVec2(target.aabb.min_x * physics_config::kPpm, window_height - target.aabb.min_y * physics_config::kPpm),
+            ImVec2(target.aabb.max_x * physics_config::kPpm, window_height - target.aabb.max_y * physics_config::kPpm),
+            IM_COL32(255, 255, 0, 255), 0.0f, 0, 3.0f
+        );
+
+        // Connect red line to the Left Child and mark it with a red dot.
+        if (target.left_child != std::numeric_limits<size_t>::max()) {
+            ImVec2 left_center = GetAabbCenter(nodes[target.left_child].aabb);
+            left_center = {left_center.x * physics_config::kPpm, window_height - left_center.y * physics_config::kPpm};
+            draw_list->AddLine(target_center, left_center, IM_COL32(255, 50, 50, 255), 2.0f);
+            draw_list->AddCircleFilled(left_center, 4.0f, IM_COL32(255, 50, 50, 255));
+        }
+
+        // Right Child blue.
+        if (target.right_child != std::numeric_limits<size_t>::max()) {
+            ImVec2 right_center = GetAabbCenter(nodes[target.right_child].aabb);
+            right_center = {right_center.x * physics_config::kPpm, window_height - right_center.y * physics_config::kPpm};
+            draw_list->AddLine(target_center, right_center, IM_COL32(50, 150, 255, 255), 2.0f);
+            draw_list->AddCircleFilled(right_center, 4.0f, IM_COL32(50, 150, 255, 255));
+        }
+    }
 }

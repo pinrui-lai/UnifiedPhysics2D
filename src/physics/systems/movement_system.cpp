@@ -1,6 +1,3 @@
-#include <algorithm>
-#include <execution>
-
 #include "physics_world.h"
 #include "movement_system.h"
 

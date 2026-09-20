@@ -1,5 +1,7 @@
 #include "physics_world.h"
 
+#include <algorithm>
+
 BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float inertia, float restitution, float friction)
 {
     const size_t new_id = positions_.size();
@@ -20,13 +22,16 @@ BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2&
 
 BodyHandle PhysicsWorld::CreateCircle(const Vec2& pos, const float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float radius, const float restitution, const float friction)
 {
+    Aabb aabb{-radius, -radius, radius, radius};
+    local_aabbs_.emplace_back(-radius, -radius, radius, radius);
     shapes_.push_back(CircleShape{radius});
-    float inertia = 0.5f * mass * radius * radius;
+    const float inertia = 0.5f * mass * radius * radius;
     return CreateBody(pos, rotation, velocity, angular_velocity, mass, inertia, restitution, friction);
 }
 
 BodyHandle PhysicsWorld::CreateBox(const Vec2& pos, const float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float half_width, const float half_height, const float restitution, const float friction)
 {
+    local_aabbs_.emplace_back(-half_width, -half_height, half_width, half_height);
     shapes_.push_back(BoxShape{half_width, half_height});
     const float width = half_width * 2;
     const float height = half_height * 2;
@@ -36,6 +41,18 @@ BodyHandle PhysicsWorld::CreateBox(const Vec2& pos, const float rotation, const 
 
 BodyHandle PhysicsWorld::CreatePolygon(const Vec2& pos, const float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const std::vector<Vec2>& vertices, const float restitution, const float friction)
 {
+    float min_x = std::numeric_limits<float>::max();
+    float min_y = std::numeric_limits<float>::max();
+    float max_x = std::numeric_limits<float>::min();
+    float max_y = std::numeric_limits<float>::min();
+    for (const Vec2& vertex : vertices)
+    {
+        min_x = std::min(vertex.x, min_x);
+        max_x = std::max(vertex.x, max_x);
+        min_y = std::min(vertex.y, min_y);
+        max_y = std::max(vertex.y, max_y);
+    }
+    local_aabbs_.emplace_back(min_x, min_y, max_x, max_y);
     shapes_.push_back(PolygonShape(vertices_.size(), vertices.size()));
     return CreateBody(pos, rotation, velocity, angular_velocity, mass, 1, restitution, friction);
 }

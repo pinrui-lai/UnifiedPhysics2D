@@ -6,53 +6,60 @@
 
 void CollisionSystem::SolveCollision(PhysicsWorld& world)
 {
-    world.debug_contacts_.clear();
     world.debug_incident_edges_.clear();
     world.debug_reference_edges_.clear();
     
     world.frame_arena_.release();
     
-    // Use buffered memory.
-    std::pmr::vector<Contact> contacts(&world.frame_arena_);
-    contacts.reserve(1000);
-    
-    const size_t count = world.positions_.size();
-    // Check Collision.
-    for (size_t i = 0; i < count - 1; ++i)
+    // Mark all manifold's is_overlapping false.
+    for (auto& manifold : world.manifolds_)
     {
-        for (size_t j = i + 1; j < count; ++j)
-        {
-            if (world.rigid_bodies_[i].mass == 0.0f && world.rigid_bodies_[j].mass == 0.0f) continue;
-            
-            std::array<std::optional<Contact>, 2> out_contacts = GJK(world, i, j);
-            for (const auto& contact : out_contacts)
-            {
-                if (contact.has_value())
-                {
-                    if (world.show_debug_contact_points_)
-                    {
-                        world.debug_contacts_.push_back(*contact);    
-                    }
-                    contacts.push_back(*contact);
-                }
-            }
-        }
+        manifold.is_overlapping = false;
+    }
+    
+    // Broad-Phase.
+    world.bvh_tree_.Build(world);
+    const size_t count = world.positions_.size();
+    for (size_t i = 0; i < count; ++i)
+    {
+        world.bvh_tree_.Query(world, i);
+    }
+    
+    // Remove manifold whose AABBs no longer overlap.
+    std::erase_if(world.manifolds_, [](const Manifold& manifold)
+    {
+        return manifold.is_overlapping == false;
+    });
+    
+    // Narrow-Phase.
+    for (auto& manifold : world.manifolds_)
+    {
+        if (world.rigid_bodies_[manifold.a].mass == 0.0f && world.rigid_bodies_[manifold.b].mass == 0.0f) continue;
+        Gjk(world, manifold);
     }
     
     // Solve Collision.
-    for (auto& contact : contacts)
+    for (auto& manifold : world.manifolds_)
     {
-        PreSolve(world, contact);
-        for (int i = 0; i < 20; ++i)
+        if (manifold.contact_count == 0) continue;
+        
+        for (size_t i = 0; i < manifold.contact_count; ++i)
         {
-            SolveVelocityConstraint(world, contact);
-            SolvePositionConstraint(world, contact);
+            PreSolve(world, manifold, i);
+            for (int j = 0; j < 20; ++j)
+            {
+                SolveVelocityConstraint(world, manifold, i);
+                SolvePositionConstraint(world, manifold, i);
+            }
         }
     }
 }
 
-std::array<std::optional<Contact>, 2> CollisionSystem::GJK(PhysicsWorld& world, size_t index_a, size_t index_b)
+std::array<std::optional<Contact>, 2> CollisionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
 {
+    const size_t index_a = manifold.a;
+    const size_t index_b = manifold.b;
+    
     const Vec2 position_a = world.positions_[index_a].val;
     const Vec2 position_b = world.positions_[index_b].val;
     Vec2 dir = (position_b - position_a).Normalized();
@@ -73,16 +80,19 @@ std::array<std::optional<Contact>, 2> CollisionSystem::GJK(PhysicsWorld& world, 
         // Dot(Origin point to new_minkowski_support, dir)
         if (new_minkowski_support.Dot(dir) < 0)
         {
+            manifold.contact_count = 0;
             return {std::nullopt, std::nullopt};
         }
         
         simplex.push_back(new_minkowski_support);
         
+        // A collision has been confirmed.
         if (HandleSimplex(simplex, dir))
         {
-            auto [collision_normal, depth] = EPA(world, simplex, index_a, index_b);
-            const auto [fst, snd] = GetCollisionPoints(world, collision_normal, depth, index_a, index_b);  
-            return {fst, snd};
+            manifold.contact_count = 1;
+            auto [collision_normal, depth] = Epa(world, simplex, manifold);
+            const auto [first_contact, second_contact] = GetCollisionPoints(world, collision_normal, depth, manifold);  
+            return {first_contact, second_contact};
         }
     }
 }
@@ -166,7 +176,7 @@ Vec2 CollisionSystem::GetSupport(const PhysicsWorld& world, const size_t i, cons
     }, s);
 }
 
-std::pair<Vec2, float> CollisionSystem::EPA(const PhysicsWorld& world, const FixedSimplex& simplex, const size_t index_a, const size_t index_b)
+std::pair<Vec2, float> CollisionSystem::Epa(const PhysicsWorld& world, const FixedSimplex& simplex, Manifold& manifold)
 {
     FixedPolytope polytope;
     for (size_t i = 0; i < simplex.size(); ++i)
@@ -213,9 +223,9 @@ std::pair<Vec2, float> CollisionSystem::EPA(const PhysicsWorld& world, const Fix
         }
         
         // Find new Minkowski Support Point.
-        Vec2 new_point = GetSupport(world, index_a, min_normal) - GetSupport(world, index_b, -min_normal);
+        Vec2 new_point = GetSupport(world, manifold.a, min_normal) - GetSupport(world, manifold.b, -min_normal);
         
-        // It is already the boundary of the complete Minkowski simplex.
+        // It is already the boundary of the complete Minkowski diff.
         const float new_point_distance = new_point.Dot(min_normal);
         if (constexpr float tolerance = 0.00001f; new_point_distance - min_distance < tolerance || polytope.size() >= polytope.capacity())
         {
@@ -227,16 +237,17 @@ std::pair<Vec2, float> CollisionSystem::EPA(const PhysicsWorld& world, const Fix
     }
 }
 
-std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 collision_normal, const float depth, size_t index_a, size_t index_b)
+std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 collision_normal, const float depth, Manifold& manifold)
 {
+    size_t index_a = manifold.a;
+    size_t index_b = manifold.b;
+    
     Shape shape_a = world.shapes_[index_a];
     Shape shape_b = world.shapes_[index_b];
 
-    Contact contact1;
+    Contact& contact1 = manifold.contacts[0];
     contact1.depth = depth;
-    contact1.normal = collision_normal;
-    contact1.a = index_a;
-    contact1.b = index_b;
+    manifold.normal = collision_normal;
     
     std::optional<Contact> contact2 = std::nullopt;
     
@@ -318,11 +329,12 @@ std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(P
             // If both points are penetrated, create and push the second contact.
             if (both_penetrating)
             {
-                contact2 = contact1;
+                manifold.contact_count++;
+                manifold.contacts[1] = contact1;
                 // If penetrating reference edge, `clipped point dot normal` is negative.
-                contact2.value().depth   = is_a_deeper ? -clipped_inc_b_dot_normal : -clipped_inc_a_dot_normal;
+                manifold.contacts[1].depth   = is_a_deeper ? -clipped_inc_b_dot_normal : -clipped_inc_a_dot_normal;
                 
-                assign_collision_points(contact2.value(), clipped_incident_edge[secondary_idx]);
+                assign_collision_points(manifold.contacts[1], clipped_incident_edge[secondary_idx]);
             }
         }
     }
@@ -404,17 +416,19 @@ std::span<const Vec2> CollisionSystem::GetVertices(PhysicsWorld& world, const Po
     return local_vertices;
 }
 
-void CollisionSystem::PreSolve(const PhysicsWorld& world, Contact& contact)
+void CollisionSystem::PreSolve(const PhysicsWorld& world, Manifold& manifold, const size_t contact_idx)
 {
+    Contact& contact = manifold.contacts[contact_idx];
+    
     // Effective Mass on normal: K = 1/mA + 1/mB + (rA x n)^2 / IA + (rB x n)^2 / IB
-    const Vec2 ra = contact.collision_point_a - world.positions_[contact.a].val;
-    const Vec2 rb = contact.collision_point_b - world.positions_[contact.b].val;
+    const Vec2 ra = contact.collision_point_a - world.positions_[manifold.a].val;
+    const Vec2 rb = contact.collision_point_b - world.positions_[manifold.b].val;
     
-    const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[contact.a];
-    const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[contact.b];
+    const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[manifold.a];
+    const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[manifold.b];
     
-    const float ra_n = ra.Cross(contact.normal);
-    const float rb_n = rb.Cross(contact.normal);
+    const float ra_n = ra.Cross(manifold.normal);
+    const float rb_n = rb.Cross(manifold.normal);
     const float k_normal = rigid_body_a.inv_mass + rigid_body_b.inv_mass
                             + rigid_body_a.inv_inertia * ra_n * ra_n
                             + rigid_body_b.inv_inertia * rb_n * rb_n;
@@ -422,7 +436,7 @@ void CollisionSystem::PreSolve(const PhysicsWorld& world, Contact& contact)
     contact.mass_normal = (k_normal > 0.f)? 1.f / k_normal : 0.f;
     
     // Effective Mass on tangent
-    const Vec2 tangent = contact.normal.NormalWithoutNormalized();
+    const Vec2 tangent = manifold.normal.NormalWithoutNormalized();
     const float ra_t = ra.Cross(tangent);
     const float rb_t = rb.Cross(tangent);
     const float k_tangent = rigid_body_a.inv_mass + rigid_body_b.inv_mass
@@ -437,19 +451,21 @@ void CollisionSystem::PreSolve(const PhysicsWorld& world, Contact& contact)
     contact.bias = beta * penetration;
 }
 
-void CollisionSystem::SolveVelocityConstraint(PhysicsWorld& world, Contact& contact)
+void CollisionSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifold& manifold, const size_t contact_idx)
 {
-    const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[contact.a];
-    const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[contact.b];
-
-    const Vec2 ra = contact.collision_point_a - world.positions_[contact.a].val;
-    const Vec2 rb = contact.collision_point_b - world.positions_[contact.b].val;
+    Contact& contact = manifold.contacts[contact_idx];
     
-    const Vec2 collision_point_vel_a = world.velocities_[contact.a].val + Vec2::ZCross(world.angular_velocities_[contact.a].val, ra);
-    const Vec2 collision_point_vel_b = world.velocities_[contact.b].val + Vec2::ZCross(world.angular_velocities_[contact.b].val, rb);
+    const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[manifold.a];
+    const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[manifold.b];
+
+    const Vec2 ra = contact.collision_point_a - world.positions_[manifold.a].val;
+    const Vec2 rb = contact.collision_point_b - world.positions_[manifold.b].val;
+    
+    const Vec2 collision_point_vel_a = world.velocities_[manifold.a].val + Vec2::ZCross(world.angular_velocities_[manifold.a].val, ra);
+    const Vec2 collision_point_vel_b = world.velocities_[manifold.b].val + Vec2::ZCross(world.angular_velocities_[manifold.b].val, rb);
 
     const Vec2 rel_vel = collision_point_vel_b - collision_point_vel_a;
-    const float rel_vel_normal = rel_vel.Dot(contact.normal);
+    const float rel_vel_normal = rel_vel.Dot(manifold.normal);
     if (rel_vel_normal > 0.0f) return;
     
     const float restitution = std::min(rigid_body_a.restitution, rigid_body_b.restitution);
@@ -468,22 +484,22 @@ void CollisionSystem::SolveVelocityConstraint(PhysicsWorld& world, Contact& cont
     // Apply impulse, Jacobian Matrix of Penetration Constrain = [-(transpose n), -CrossProduct(ra, normal), transpose n, CrossProduct(ra, normal)] 
     if (rigid_body_a.mass > 0.f)
     {
-        world.velocities_[contact.a].val -= contact.normal * delta_impulse_magnitude * rigid_body_a.inv_mass;
-        world.angular_velocities_[contact.a].val -= ra.Cross(contact.normal) * delta_impulse_magnitude * rigid_body_a.inv_inertia;
+        world.velocities_[manifold.a].val -= manifold.normal * delta_impulse_magnitude * rigid_body_a.inv_mass;
+        world.angular_velocities_[manifold.a].val -= ra.Cross(manifold.normal) * delta_impulse_magnitude * rigid_body_a.inv_inertia;
     }
     
     if (rigid_body_b.mass > 0.f)
     {
-        world.velocities_[contact.b].val += contact.normal * delta_impulse_magnitude * rigid_body_b.inv_mass;
-        world.angular_velocities_[contact.b].val += rb.Cross(contact.normal) * delta_impulse_magnitude * rigid_body_b.inv_inertia;
+        world.velocities_[manifold.b].val += manifold.normal * delta_impulse_magnitude * rigid_body_b.inv_mass;
+        world.angular_velocities_[manifold.b].val += rb.Cross(manifold.normal) * delta_impulse_magnitude * rigid_body_b.inv_inertia;
     }
     
     // ============ Tangent Friction ================
-    const Vec2 updated_vel_a = world.velocities_[contact.a].val + Vec2::ZCross(world.angular_velocities_[contact.a].val, ra);
-    const Vec2 updated_vel_b = world.velocities_[contact.b].val + Vec2::ZCross(world.angular_velocities_[contact.b].val, rb);
+    const Vec2 updated_vel_a = world.velocities_[manifold.a].val + Vec2::ZCross(world.angular_velocities_[manifold.a].val, ra);
+    const Vec2 updated_vel_b = world.velocities_[manifold.b].val + Vec2::ZCross(world.angular_velocities_[manifold.b].val, rb);
     const Vec2 updated_rel_vel = updated_vel_b - updated_vel_a;
     
-    const Vec2 tangent = contact.normal.NormalWithoutNormalized();
+    const Vec2 tangent = manifold.normal.NormalWithoutNormalized();
     const float rel_vel_tan = updated_rel_vel.Dot(tangent);
     
     const float mu = std::sqrt(rigid_body_a.friction * rigid_body_b.friction);
@@ -498,32 +514,34 @@ void CollisionSystem::SolveVelocityConstraint(PhysicsWorld& world, Contact& cont
     
     if (rigid_body_a.mass > 0.f)
     {
-        world.velocities_[contact.a].val -= tangent * delta_impulse_magnitude_tan * rigid_body_a.inv_mass;
-        world.angular_velocities_[contact.a].val -= ra.Cross(tangent) * delta_impulse_magnitude_tan * rigid_body_a.inv_inertia;
+        world.velocities_[manifold.a].val -= tangent * delta_impulse_magnitude_tan * rigid_body_a.inv_mass;
+        world.angular_velocities_[manifold.a].val -= ra.Cross(tangent) * delta_impulse_magnitude_tan * rigid_body_a.inv_inertia;
     }
     
     if (rigid_body_b.mass > 0.f)
     {
-        world.velocities_[contact.b].val += tangent * delta_impulse_magnitude_tan * rigid_body_b.inv_mass;
-        world.angular_velocities_[contact.b].val += rb.Cross(tangent) * delta_impulse_magnitude_tan * rigid_body_b.inv_inertia;
+        world.velocities_[manifold.b].val += tangent * delta_impulse_magnitude_tan * rigid_body_b.inv_mass;
+        world.angular_velocities_[manifold.b].val += rb.Cross(tangent) * delta_impulse_magnitude_tan * rigid_body_b.inv_inertia;
     }
 }
 
-void CollisionSystem::SolvePositionConstraint(PhysicsWorld& world, Contact& contact)
+void CollisionSystem::SolvePositionConstraint(PhysicsWorld& world, Manifold& manifold, size_t contact_idx)
 {
-    const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[contact.a];
-    const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[contact.b];
+    Contact& contact = manifold.contacts[contact_idx];
+    
+    const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[manifold.a];
+    const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[manifold.b];
     
     if (rigid_body_a.mass == 0.0f && rigid_body_b.mass == 0.0f) return;
 
-    const Vec2 ra = contact.collision_point_a - world.positions_[contact.a].val;
-    const Vec2 rb = contact.collision_point_b - world.positions_[contact.b].val;
+    const Vec2 ra = contact.collision_point_a - world.positions_[manifold.a].val;
+    const Vec2 rb = contact.collision_point_b - world.positions_[manifold.b].val;
     
     // Use pseudo velocities compute relative velocity
-    const Vec2 collision_point_pseudo_vel_a = world.pseudo_velocities_[contact.a].val + Vec2::ZCross(world.pseudo_angular_velocities_[contact.a].val, ra);
-    const Vec2 collision_point_pseudo_vel_b = world.pseudo_velocities_[contact.b].val + Vec2::ZCross(world.pseudo_angular_velocities_[contact.b].val, rb);
+    const Vec2 collision_point_pseudo_vel_a = world.pseudo_velocities_[manifold.a].val + Vec2::ZCross(world.pseudo_angular_velocities_[manifold.a].val, ra);
+    const Vec2 collision_point_pseudo_vel_b = world.pseudo_velocities_[manifold.b].val + Vec2::ZCross(world.pseudo_angular_velocities_[manifold.b].val, rb);
 
-    const float rel_pseudo_vel_normal = (collision_point_pseudo_vel_b - collision_point_pseudo_vel_a).Dot(contact.normal);
+    const float rel_pseudo_vel_normal = (collision_point_pseudo_vel_b - collision_point_pseudo_vel_a).Dot(manifold.normal);
     
     float delta_pseudo_impulse_magnitude = contact.mass_normal * (-rel_pseudo_vel_normal + contact.bias);
     
@@ -535,13 +553,13 @@ void CollisionSystem::SolvePositionConstraint(PhysicsWorld& world, Contact& cont
     // Apply impulse, Jacobian Matrix of Penetration Constrain = [-(transpose n), -CrossProduct(ra, normal), transpose n, CrossProduct(ra, normal)] 
     if (rigid_body_a.mass > 0.f)
     {
-        world.pseudo_velocities_[contact.a].val -= contact.normal * delta_pseudo_impulse_magnitude * rigid_body_a.inv_mass;
-        world.pseudo_angular_velocities_[contact.a].val -= ra.Cross(contact.normal) * delta_pseudo_impulse_magnitude * rigid_body_a.inv_inertia;
+        world.pseudo_velocities_[manifold.a].val -= manifold.normal * delta_pseudo_impulse_magnitude * rigid_body_a.inv_mass;
+        world.pseudo_angular_velocities_[manifold.a].val -= ra.Cross(manifold.normal) * delta_pseudo_impulse_magnitude * rigid_body_a.inv_inertia;
     }
     
     if (rigid_body_b.mass > 0.f)
     {
-        world.pseudo_velocities_[contact.b].val += contact.normal * delta_pseudo_impulse_magnitude * rigid_body_b.inv_mass;
-        world.pseudo_angular_velocities_[contact.b].val += rb.Cross(contact.normal) * delta_pseudo_impulse_magnitude * rigid_body_b.inv_inertia;
+        world.pseudo_velocities_[manifold.b].val += manifold.normal * delta_pseudo_impulse_magnitude * rigid_body_b.inv_mass;
+        world.pseudo_angular_velocities_[manifold.b].val += rb.Cross(manifold.normal) * delta_pseudo_impulse_magnitude * rigid_body_b.inv_inertia;
     }
 }

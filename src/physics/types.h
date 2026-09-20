@@ -1,7 +1,10 @@
 #pragma once
 
-#include <cmath>
 #include <array>
+#include <cmath>
+#include <vector>
+
+class PhysicsWorld;
 
 struct Vec2
 {
@@ -43,12 +46,9 @@ struct Vec2
 
 struct Contact
 {
-    float depth;
-    Vec2 normal;
     Vec2 collision_point_a;
     Vec2 collision_point_b;
-    size_t a;
-    size_t b;
+    float depth;
     
     float impulse_sum{0.f};
     float pseudo_impulse_sum{0.f};
@@ -57,6 +57,19 @@ struct Contact
     float mass_normal{0.f};
     float mass_tangent{0.f};
     float bias{0.f};
+};
+
+struct Manifold
+{
+    std::array<Contact, 2> contacts;
+    Vec2 normal;
+    size_t a;
+    size_t b;
+    size_t contact_count{0};
+    static constexpr float break_distance_sq{0.01f}; // distance threshold square
+    bool is_overlapping{true};
+    
+    Manifold(const size_t a, const size_t b) : a(a), b(b){}
 };
 
 struct BodyHandle
@@ -106,3 +119,55 @@ struct FixedVector
 
 using FixedSimplex = FixedVector<Vec2, 3>;
 using FixedPolytope = FixedVector<Vec2, 32>;
+
+struct Aabb
+{
+    float min_x, min_y;
+    float max_x, max_y;
+
+    static Aabb Combine(const Aabb& a, const Aabb& b)
+    {
+        return {std::min(a.min_x, b.min_x), std::min(a.min_y, b.min_y),
+            std::max(a.max_x, b.max_x), std::max(a.max_y, b.max_y)};
+    }
+    static bool Overlap(const Aabb& a, const Aabb& b)
+    {
+        return !(a.max_x < b.min_x || a.min_x > b.max_x ||
+                 a.max_y < b.min_y || a.min_y > b.max_y);
+    }
+};
+
+struct BvhNode
+{
+    Aabb aabb;
+    size_t left_child{std::numeric_limits<size_t>::max()};
+    size_t right_child{std::numeric_limits<size_t>::max()};
+    size_t leaf_id{std::numeric_limits<size_t>::max()};
+    
+    bool IsLeaf() const { return leaf_id != std::numeric_limits<size_t>::max(); }
+};
+
+struct Item
+{
+    size_t id;
+    uint32_t morton_code;
+};
+
+class MortonBvh
+{
+public:
+    void Build(PhysicsWorld& world);
+    void Query(PhysicsWorld& world, size_t query_obj_idx) const;
+    
+private:
+    std::vector<BvhNode> nodes_;
+    std::vector<Aabb> world_aabbs_;
+    size_t root_index_{std::numeric_limits<size_t>::max()};
+    
+    static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, float rot, const Aabb& local_aabb);
+    static uint32_t ExpandBits(uint32_t bits);
+    static uint32_t GetMortonCode(const Vec2& pos, float min_x, float min_y, float max_x, float max_y);
+    size_t BuildRecursive(std::pmr::vector<Item>& items, const std::vector<Aabb>& world_aabbs, size_t start, size_t end);
+    
+    friend PhysicsWorld;
+};

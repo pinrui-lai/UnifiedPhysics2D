@@ -21,7 +21,8 @@ private:
     std::vector<RotationComponent> rotations_;
     std::vector<Shape> shapes_;
     std::vector<Vec2> vertices_;
-
+    std::vector<Aabb> local_aabbs_;
+    
     std::pmr::monotonic_buffer_resource frame_arena_;
     
 public:
@@ -35,24 +36,28 @@ public:
     BodyHandle CreatePolygon(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, const std::vector<Vec2>& vertices, float restitution = 0.1f, float friction = 0.1f);
     void ApplyForce(BodyHandle handle, const Vec2& force);
     
-    std::vector<PositionComponent>& GetPositions() { return positions_; }
-    std::vector<RotationComponent>& GetRotations() { return rotations_; }
-    std::vector<Shape>& GetShapes() { return shapes_; }
-    std::vector<Vec2>& GetVertices() { return vertices_; }
+    const std::vector<PositionComponent>& GetPositions() { return positions_; }
+    const std::vector<RotationComponent>& GetRotations() { return rotations_; }
+    const std::vector<Shape>& GetShapes() { return shapes_; }
+    const std::vector<Vec2>& GetVertices() { return vertices_; }
+    const std::vector<BvhNode>& GetBvhNodes() { return bvh_tree_.nodes_; }
+    const std::vector<Manifold>& GetManifolds() { return manifolds_; }
     
     void SetPosition(BodyHandle handle, const Vec2& pos);
     void SetAngularVelocity(BodyHandle handle, float angular_vel);
     void SetRestitution(BodyHandle handle, float restitution);
     void SetFriction(BodyHandle handle, float friction);
     
+    float gravity_;
+    MortonBvh bvh_tree_;
+    std::vector<Manifold> manifolds_;
+    
     bool show_debug_contact_points_ = true;
     bool show_debug_clipping_ = true;
-    std::vector<Contact> debug_contacts_;
     std::vector<std::array<Vec2, 2>> debug_incident_edges_;
     std::vector<std::array<Vec2, 2>> debug_reference_edges_;
     
-    float gravity_;
-    
     friend MovementSystem;
     friend CollisionSystem;
+    friend MortonBvh;
 };
