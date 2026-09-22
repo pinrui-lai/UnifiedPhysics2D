@@ -35,7 +35,31 @@ void CollisionSystem::SolveCollision(PhysicsWorld& world)
     for (auto& manifold : world.manifolds_)
     {
         if (world.rigid_bodies_[manifold.a].mass == 0.0f && world.rigid_bodies_[manifold.b].mass == 0.0f) continue;
+        
+        // Store old contacts and contact_count from the previous frame.
+        std::array<Contact, 2> old_contacts = manifold.contacts;
+        const size_t old_contact_count = manifold.contact_count;
+        
+        // Write new contacts of the current frame in manifold.
         Gjk(world, manifold);
+        
+        // Match Feature ID and inherit old impulse.
+        for (size_t i = 0; i < manifold.contact_count; ++i)
+        {
+            Contact& new_c = manifold.contacts[i];
+        
+            for (size_t j = 0; j < old_contact_count; ++j)
+            {
+                const Contact& old_c = old_contacts[j];
+                // ID matching successful, inheriting the old impulse.
+                if (new_c.id.key == old_c.id.key)
+                {
+                    new_c.normal_impulse_sum = old_c.normal_impulse_sum;
+                    new_c.tangent_impulse_sum = old_c.tangent_impulse_sum;
+                    break;
+                }
+            }
+        }
     }
     
     // Solve Collision.
@@ -45,8 +69,19 @@ void CollisionSystem::SolveCollision(PhysicsWorld& world)
         
         for (size_t i = 0; i < manifold.contact_count; ++i)
         {
-            PreSolve(world, manifold, i);
-            for (int j = 0; j < 20; ++j)
+            InitializeContact(world, manifold, i);
+        }
+        for (size_t i = 0; i < manifold.contact_count; ++i)
+        {
+            WarmStartContact(world, manifold, i);
+        }
+    }
+    for (int j = 0; j < 6; ++j)
+    {
+        for (auto& manifold : world.manifolds_)
+        {
+            if (manifold.contact_count == 0) continue;
+            for (size_t i = 0; i < manifold.contact_count; ++i)
             {
                 SolveVelocityConstraint(world, manifold, i);
                 SolvePositionConstraint(world, manifold, i);
@@ -55,7 +90,7 @@ void CollisionSystem::SolveCollision(PhysicsWorld& world)
     }
 }
 
-std::array<std::optional<Contact>, 2> CollisionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
+void CollisionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
 {
     const size_t index_a = manifold.a;
     const size_t index_b = manifold.b;
@@ -81,7 +116,12 @@ std::array<std::optional<Contact>, 2> CollisionSystem::Gjk(PhysicsWorld& world, 
         if (new_minkowski_support.Dot(dir) < 0)
         {
             manifold.contact_count = 0;
-            return {std::nullopt, std::nullopt};
+            for (auto& contact : manifold.contacts)
+            {
+                contact.normal_impulse_sum = 0;
+                contact.tangent_impulse_sum = 0;
+            }
+            return;
         }
         
         simplex.push_back(new_minkowski_support);
@@ -91,8 +131,8 @@ std::array<std::optional<Contact>, 2> CollisionSystem::Gjk(PhysicsWorld& world, 
         {
             manifold.contact_count = 1;
             auto [collision_normal, depth] = Epa(world, simplex, manifold);
-            const auto [first_contact, second_contact] = GetCollisionPoints(world, collision_normal, depth, manifold);  
-            return {first_contact, second_contact};
+            GetCollisionPoints(world, collision_normal, depth, manifold);
+            return;
         }
     }
 }
@@ -176,7 +216,7 @@ Vec2 CollisionSystem::GetSupport(const PhysicsWorld& world, const size_t i, cons
     }, s);
 }
 
-std::pair<Vec2, float> CollisionSystem::Epa(const PhysicsWorld& world, const FixedSimplex& simplex, Manifold& manifold)
+std::pair<Vec2, float> CollisionSystem::Epa(const PhysicsWorld& world, const FixedSimplex& simplex, const Manifold& manifold)
 {
     FixedPolytope polytope;
     for (size_t i = 0; i < simplex.size(); ++i)
@@ -237,7 +277,7 @@ std::pair<Vec2, float> CollisionSystem::Epa(const PhysicsWorld& world, const Fix
     }
 }
 
-std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 collision_normal, const float depth, Manifold& manifold)
+void CollisionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 collision_normal, const float depth, Manifold& manifold)
 {
     size_t index_a = manifold.a;
     size_t index_b = manifold.b;
@@ -245,11 +285,13 @@ std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(P
     Shape shape_a = world.shapes_[index_a];
     Shape shape_b = world.shapes_[index_b];
 
+    manifold.normal = collision_normal;
     Contact& contact1 = manifold.contacts[0];
     contact1.depth = depth;
-    manifold.normal = collision_normal;
+    contact1.normal_impulse_sum = 0.f;
+    contact1.tangent_impulse_sum = 0.f;
     
-    std::optional<Contact> contact2 = std::nullopt;
+    contact1.id.key = 0;
     
     std::visit([&](const auto& a, const auto& b)
     {
@@ -260,53 +302,79 @@ std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(P
         {
             contact1.collision_point_a = world.positions_[index_a].val + collision_normal * a.radius;
             contact1.collision_point_b = world.positions_[index_b].val - collision_normal * b.radius;
+            contact1.id.key = 0;
         }
         else if constexpr (std::is_same_v<A, CircleShape>)
         {
             contact1.collision_point_a = world.positions_[index_a].val + collision_normal * a.radius;
             contact1.collision_point_b = contact1.collision_point_a - collision_normal * depth;
+            
+            contact1.id.features.type_a = 2;
+            contact1.id.features.index_a = 0;
+            
+            std::array<Vec2, 2> edge_pos_b;
+            std::array<size_t, 2> edge_ids_b;
+            float edge_b_dot_normal;
+            GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
+            
+            contact1.id.features.type_b = 1;
+            contact1.id.features.index_b = edge_ids_b[0];
         }
         else if constexpr (std::is_same_v<B, CircleShape>)
         {
             contact1.collision_point_b = world.positions_[index_b].val - collision_normal * b.radius;
             contact1.collision_point_a = contact1.collision_point_b + collision_normal * depth;
+            
+            contact1.id.features.type_b = 2;
+            contact1.id.features.index_b = 0;
+            
+            std::array<Vec2, 2> edge_pos_a;
+            std::array<size_t, 2> edge_ids_a;
+            float edge_a_dot_normal;
+            GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
+            
+            contact1.id.features.type_a = 1;
+            contact1.id.features.index_a = edge_ids_a[0];
         }
         else
         {
             // Decide incident edge and reference edge.
-            std::array<Vec2, 2> edge_a;
+            std::array<Vec2, 2> edge_pos_a;
+            std::array<size_t, 2> edge_ids_a;
             float edge_a_dot_normal;
-            GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_a, edge_a_dot_normal);
+            GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
             
-            std::array<Vec2, 2> edge_b;
+            std::array<Vec2, 2> edge_pos_b;
+            std::array<size_t, 2> edge_ids_b;
             float edge_b_dot_normal;
-            GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_b, edge_b_dot_normal);
+            GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
             
             const bool is_ref_a = edge_a_dot_normal > edge_b_dot_normal;
-            const std::array<Vec2, 2> reference_edge = edge_a_dot_normal > edge_b_dot_normal ? edge_a : edge_b;
-            const std::array<Vec2, 2> incident_edge = edge_a_dot_normal > edge_b_dot_normal ? edge_b : edge_a;
+            const std::array<Vec2, 2> ref_edge_pos = edge_a_dot_normal > edge_b_dot_normal ? edge_pos_a : edge_pos_b;
+            const std::array<Vec2, 2> inc_edge_pos = edge_a_dot_normal > edge_b_dot_normal ? edge_pos_b : edge_pos_a;
+            const std::array<size_t, 2> ref_edge_ids = edge_a_dot_normal > edge_b_dot_normal ? edge_ids_a : edge_ids_b;
+            const std::array<size_t, 2> inc_edge_ids = edge_a_dot_normal > edge_b_dot_normal ? edge_ids_b : edge_ids_a;
             
             if (world.show_debug_clipping_)
             {
-                world.debug_incident_edges_.push_back(incident_edge);
-                world.debug_reference_edges_.push_back(reference_edge);
-                
+                world.debug_incident_edges_.push_back(inc_edge_pos);
+                world.debug_reference_edges_.push_back(ref_edge_pos);
             }
             
             // Clip incident edge.
-            std::array<Vec2, 2> clipped_incident_edge = incident_edge;
+            std::array<Vec2, 2> clipped_incident_edge = inc_edge_pos;
+            std::array<int, 2> clipping_ref_vertex_ids{-1, -1}; // -1 : Not cut
+            const Vec2 ref_a_to_b = ref_edge_pos[1] - ref_edge_pos[0]; // normal of clip-face (ref edge).
+            ClipEdge(ref_a_to_b, ref_edge_pos[0], ref_edge_ids[0], clipped_incident_edge, clipping_ref_vertex_ids);
             
-            const Vec2 ref_a_to_b = reference_edge[1] - reference_edge[0]; // normal of clip-face (ref edge).
-            ClipEdge(ref_a_to_b, reference_edge[0], clipped_incident_edge);
-            
-            const Vec2 ref_b_to_a = reference_edge[0] - reference_edge[1];
-            ClipEdge(ref_b_to_a, reference_edge[1], clipped_incident_edge);
+            const Vec2 ref_b_to_a = ref_edge_pos[0] - ref_edge_pos[1];
+            ClipEdge(ref_b_to_a, ref_edge_pos[1], ref_edge_ids[1], clipped_incident_edge, clipping_ref_vertex_ids);
 
             const Vec2 ref_a_to_b_normal = ref_a_to_b.Normal();
             
             // Keep point which penetrates reference edge.
-            const float clipped_inc_a_dot_normal = (clipped_incident_edge[0] - reference_edge[0]).Dot(ref_a_to_b_normal);
-            const float clipped_inc_b_dot_normal = (clipped_incident_edge[1] - reference_edge[0]).Dot(ref_a_to_b_normal);
+            const float clipped_inc_a_dot_normal = (clipped_incident_edge[0] - ref_edge_pos[0]).Dot(ref_a_to_b_normal);
+            const float clipped_inc_b_dot_normal = (clipped_incident_edge[1] - ref_edge_pos[0]).Dot(ref_a_to_b_normal);
             
             const bool is_a_deeper = clipped_inc_a_dot_normal < clipped_inc_b_dot_normal;
             const bool both_penetrating = (clipped_inc_a_dot_normal < 0.f) && (clipped_inc_b_dot_normal < 0.f);
@@ -324,30 +392,47 @@ std::pair<Contact, std::optional<Contact>> CollisionSystem::GetCollisionPoints(P
                 secondary_pt = point + ref_a_to_b_normal * target_contact.depth;
             };
             
+            auto assign_feature_id = [&](Contact& target_contact, const size_t inc_edge_ids_idx) {
+                uint8_t& inc_index = is_ref_a ? target_contact.id.features.index_b : contact1.id.features.index_a;
+                uint8_t& inc_type = is_ref_a ? target_contact.id.features.type_b : contact1.id.features.type_a;
+                uint8_t& ref_index = is_ref_a ? target_contact.id.features.index_a : contact1.id.features.index_b;
+                uint8_t& ref_type = is_ref_a ? contact1.id.features.type_a : contact1.id.features.type_b;
+                
+                // Incident edge Not cut : Incident edge Got cut
+                inc_index = clipping_ref_vertex_ids[inc_edge_ids_idx] == -1 ? inc_edge_ids[inc_edge_ids_idx] : inc_edge_ids[0];
+                inc_type = clipping_ref_vertex_ids[inc_edge_ids_idx] == -1 ? 0 : 1; // 0: Vertex, 1: Edge
+                ref_index = clipping_ref_vertex_ids[inc_edge_ids_idx] == -1 ? ref_edge_ids[0] : clipping_ref_vertex_ids[inc_edge_ids_idx];
+                ref_type = clipping_ref_vertex_ids[inc_edge_ids_idx] == -1 ? 1 : 0;
+            };
+            
             assign_collision_points(contact1, clipped_incident_edge[primary_idx]);
+            assign_feature_id(contact1, primary_idx);
 
             // If both points are penetrated, create and push the second contact.
             if (both_penetrating)
             {
-                manifold.contact_count++;
-                manifold.contacts[1] = contact1;
-                // If penetrating reference edge, `clipped point dot normal` is negative.
-                manifold.contacts[1].depth   = is_a_deeper ? -clipped_inc_b_dot_normal : -clipped_inc_a_dot_normal;
+                manifold.contact_count = 2;
+                Contact& contact2 = manifold.contacts[1];
+                contact2.normal_impulse_sum = 0.f;
+                contact2.tangent_impulse_sum = 0.f;
                 
-                assign_collision_points(manifold.contacts[1], clipped_incident_edge[secondary_idx]);
+                // If penetrating reference edge, `clipped point dot normal` is negative.
+                contact2.depth   = is_a_deeper ? -clipped_inc_b_dot_normal : -clipped_inc_a_dot_normal;
+                
+                assign_collision_points(contact2, clipped_incident_edge[secondary_idx]);
+                assign_feature_id(contact2, secondary_idx);
             }
         }
     }
     , shape_a, shape_b);
-    
-    return {contact1, contact2};
 }
 
-void CollisionSystem::GetMostPerpEdge(const std::span<const Vec2>& vertices, Vec2 dir, std::array<Vec2, 2>& out_edges,
-    float& out_dot)
+void CollisionSystem::GetMostPerpEdge(const std::span<const Vec2>& vertices, Vec2 dir, std::array<Vec2, 2>& out_edge_pos,
+    float& out_dot, std::array<size_t, 2>& out_edge_ids)
 {
     float max_dot = std::numeric_limits<float>::lowest();
-    std::array<Vec2, 2> max_edge;
+    std::array<Vec2, 2> max_edge_pos;
+    std::array<size_t, 2> max_edge_ids;
     for (size_t i = 0; i < vertices.size(); ++i)
     {
         const size_t j = (i + 1) % vertices.size();
@@ -356,16 +441,18 @@ void CollisionSystem::GetMostPerpEdge(const std::span<const Vec2>& vertices, Vec
         if (const float current_dot = ij_normal.Dot(dir); current_dot > max_dot)
         {
             max_dot = current_dot;
-            max_edge = {vertices[i], vertices[j]};
+            max_edge_pos = {vertices[i], vertices[j]};
+            max_edge_ids = {i, j};
         }
     }
     
-    out_edges = max_edge;
+    out_edge_pos = max_edge_pos;
     out_dot = max_dot;
+    out_edge_ids = max_edge_ids;
 }
 
 void CollisionSystem::ClipEdge(const Vec2 clip_face_inner_normal, const Vec2 point_on_clip_face,
-    std::array<Vec2, 2>& out_clipped_edges)
+    const size_t clip_face_id, std::array<Vec2, 2>& out_clipped_edges, std::array<int, 2>& out_clip_face_ids)
 {
     // Project Incident Edge's points to 'normal of clip-face (Reference Edge)' (all vector start from one of Reference Edge point).
     const Vec2 ref_a_to_inc_a = out_clipped_edges[0] - point_on_clip_face;
@@ -382,12 +469,16 @@ void CollisionSystem::ClipEdge(const Vec2 clip_face_inner_normal, const Vec2 poi
         // Clip point a (index 0)
         const float clip_ratio = -inc_a_dot_ref / (-inc_a_dot_ref + inc_b_dot_ref);    
         out_clipped_edges[0] = out_clipped_edges[0] + inc_a_to_b * clip_ratio;
+        
+        // Reference edge's vertex id on the clip-face.(which endpoint on the reference edge clip the incident edge)
+        out_clip_face_ids[0] = clip_face_id; 
     }
     if (inc_b_dot_ref < 0)
     {
         // Clip point b (index 1)
         const float clip_ratio = -inc_b_dot_ref / (-inc_b_dot_ref + inc_a_dot_ref);    
         out_clipped_edges[1] = out_clipped_edges[1] - inc_a_to_b * clip_ratio;
+        out_clip_face_ids[1] = clip_face_id;
     }
 }
 
@@ -416,9 +507,10 @@ std::span<const Vec2> CollisionSystem::GetVertices(PhysicsWorld& world, const Po
     return local_vertices;
 }
 
-void CollisionSystem::PreSolve(const PhysicsWorld& world, Manifold& manifold, const size_t contact_idx)
+void CollisionSystem::InitializeContact(const PhysicsWorld& world, Manifold& manifold, const size_t contact_idx)
 {
     Contact& contact = manifold.contacts[contact_idx];
+    contact.pseudo_impulse_sum = 0.0f;
     
     // Effective Mass on normal: K = 1/mA + 1/mB + (rA x n)^2 / IA + (rB x n)^2 / IB
     const Vec2 ra = contact.collision_point_a - world.positions_[manifold.a].val;
@@ -432,7 +524,6 @@ void CollisionSystem::PreSolve(const PhysicsWorld& world, Manifold& manifold, co
     const float k_normal = rigid_body_a.inv_mass + rigid_body_b.inv_mass
                             + rigid_body_a.inv_inertia * ra_n * ra_n
                             + rigid_body_b.inv_inertia * rb_n * rb_n;
-    
     contact.mass_normal = (k_normal > 0.f)? 1.f / k_normal : 0.f;
     
     // Effective Mass on tangent
@@ -449,6 +540,44 @@ void CollisionSystem::PreSolve(const PhysicsWorld& world, Manifold& manifold, co
     constexpr float slop = 0.01f; // Slight penetration is permissible to prevent shaking.
     const float penetration = std::max(0.0f, contact.depth - slop);
     contact.bias = beta * penetration;
+    
+    // Target restitution velocity.
+    const Vec2 velocity_a = world.velocities_[manifold.a].val + Vec2::ZCross(world.angular_velocities_[manifold.a].val, ra);
+    const Vec2 velocity_b = world.velocities_[manifold.b].val + Vec2::ZCross(world.angular_velocities_[manifold.b].val, rb);
+    const Vec2 rel_velocity = velocity_b - velocity_a;
+    const float rel_vel_normal = rel_velocity.Dot(manifold.normal);
+
+    const float restitution = std::min(rigid_body_a.restitution, rigid_body_b.restitution);
+    contact.restitution_velocity = 0.0f;
+    if (rel_vel_normal < -0.1f)
+    {
+        contact.restitution_velocity = -restitution * rel_vel_normal;
+    }
+}
+
+void CollisionSystem::WarmStartContact(PhysicsWorld& world, const Manifold& manifold, const size_t contact_idx)
+{
+    const Contact& contact = manifold.contacts[contact_idx];
+    const Vec2 tangent = manifold.normal.NormalWithoutNormalized();
+    
+    const Vec2 ra = contact.collision_point_a - world.positions_[manifold.a].val;
+    const Vec2 rb = contact.collision_point_b - world.positions_[manifold.b].val;
+    
+    const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[manifold.a];
+    const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[manifold.b];
+    
+    // Warm Starting
+    const Vec2 impulse = manifold.normal * contact.normal_impulse_sum + tangent * contact.tangent_impulse_sum;
+    if (rigid_body_a.mass > 0.f)
+    {
+        world.velocities_[manifold.a].val -= impulse * rigid_body_a.inv_mass;
+        world.angular_velocities_[manifold.a].val -= ra.Cross(impulse) * rigid_body_a.inv_inertia;
+    }
+    if (rigid_body_b.mass > 0.f)
+    {
+        world.velocities_[manifold.b].val += impulse * rigid_body_b.inv_mass;
+        world.angular_velocities_[manifold.b].val += rb.Cross(impulse) * rigid_body_b.inv_inertia;
+    }
 }
 
 void CollisionSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifold& manifold, const size_t contact_idx)
@@ -463,23 +592,15 @@ void CollisionSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifold& man
     
     const Vec2 collision_point_vel_a = world.velocities_[manifold.a].val + Vec2::ZCross(world.angular_velocities_[manifold.a].val, ra);
     const Vec2 collision_point_vel_b = world.velocities_[manifold.b].val + Vec2::ZCross(world.angular_velocities_[manifold.b].val, rb);
-
     const Vec2 rel_vel = collision_point_vel_b - collision_point_vel_a;
     const float rel_vel_normal = rel_vel.Dot(manifold.normal);
-    if (rel_vel_normal > 0.0f) return;
     
-    const float restitution = std::min(rigid_body_a.restitution, rigid_body_b.restitution);
-    float restitution_bias = 0.0f;
-    if (std::abs(rel_vel_normal) > 0.1f) { // Relative Velocity Threshold
-        restitution_bias = -restitution * rel_vel_normal;
-    }
-    
-    float delta_impulse_magnitude = contact.mass_normal * (-rel_vel_normal + restitution_bias);
+    float delta_impulse_magnitude = contact.mass_normal * (contact.restitution_velocity - rel_vel_normal);
     
     // Clamp impulse magnitude to make sure only push
-    const float old_impulse_magnitude = contact.impulse_sum;
-    contact.impulse_sum = std::max(old_impulse_magnitude + delta_impulse_magnitude, 0.0f);
-    delta_impulse_magnitude = contact.impulse_sum - old_impulse_magnitude;
+    const float old_impulse_magnitude = contact.normal_impulse_sum;
+    contact.normal_impulse_sum = std::max(old_impulse_magnitude + delta_impulse_magnitude, 0.0f);
+    delta_impulse_magnitude = contact.normal_impulse_sum - old_impulse_magnitude;
     
     // Apply impulse, Jacobian Matrix of Penetration Constrain = [-(transpose n), -CrossProduct(ra, normal), transpose n, CrossProduct(ra, normal)] 
     if (rigid_body_a.mass > 0.f)
@@ -502,15 +623,15 @@ void CollisionSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifold& man
     const Vec2 tangent = manifold.normal.NormalWithoutNormalized();
     const float rel_vel_tan = updated_rel_vel.Dot(tangent);
     
-    const float mu = std::sqrt(rigid_body_a.friction * rigid_body_b.friction);
     float delta_impulse_magnitude_tan = contact.mass_tangent * -rel_vel_tan;
     
     // Coulomb's law of friction : |jt| <= mu * jn
-    const float max_friction = mu * contact.impulse_sum;
-    const float old_impulse_tangent = contact.impulse_sum_tan;
+    const float mu = std::sqrt(rigid_body_a.friction * rigid_body_b.friction);
+    const float max_friction = mu * contact.normal_impulse_sum;
+    const float old_impulse_tangent = contact.tangent_impulse_sum;
     
-    contact.impulse_sum_tan = std::clamp(old_impulse_tangent + delta_impulse_magnitude_tan, -max_friction, max_friction);
-    delta_impulse_magnitude_tan = contact.impulse_sum_tan - old_impulse_tangent;
+    contact.tangent_impulse_sum = std::clamp(old_impulse_tangent + delta_impulse_magnitude_tan, -max_friction, max_friction);
+    delta_impulse_magnitude_tan = contact.tangent_impulse_sum - old_impulse_tangent;
     
     if (rigid_body_a.mass > 0.f)
     {

@@ -44,19 +44,34 @@ struct Vec2
     constexpr Vec2 NormalWithoutNormalized() const { return {-y, x}; }
 };
 
+// If contact point is not clipped, incident index is vertex index, reference index is edge index.
+// If contact point is result after clip, incident index is edge index, reference index is index of "the endpoint on the clip-face side".
+union FeatureId {
+    struct {
+        uint8_t index_a;
+        uint8_t index_b;
+        uint8_t type_a; // (0: Vertex, 1: Edge, 2: Circle)
+        uint8_t type_b;
+    } features;
+    uint32_t key = 0;
+};
+
 struct Contact
 {
     Vec2 collision_point_a;
     Vec2 collision_point_b;
     float depth;
     
-    float impulse_sum{0.f};
+    float normal_impulse_sum{0.f};
+    float tangent_impulse_sum{0.f};
     float pseudo_impulse_sum{0.f};
-    float impulse_sum_tan{0.f};
     
     float mass_normal{0.f};
     float mass_tangent{0.f};
     float bias{0.f};
+    float restitution_velocity{0.f};
+    
+    FeatureId id;
 };
 
 struct Manifold
@@ -127,8 +142,9 @@ struct Aabb
 
     static Aabb Combine(const Aabb& a, const Aabb& b)
     {
-        return {std::min(a.min_x, b.min_x), std::min(a.min_y, b.min_y),
-            std::max(a.max_x, b.max_x), std::max(a.max_y, b.max_y)};
+        return {
+            .min_x = std::min(a.min_x, b.min_x), .min_y = std::min(a.min_y, b.min_y),
+            .max_x = std::max(a.max_x, b.max_x), .max_y = std::max(a.max_y, b.max_y)};
     }
     static bool Overlap(const Aabb& a, const Aabb& b)
     {

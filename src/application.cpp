@@ -18,19 +18,23 @@ void Application::CreateInitialObjects(SDL_Window* window, PhysicsWorld& world)
     
     // Small object for debug (check contact info).
     // debug_circle_ = world.CreateCircle(Vec2{0.f, 0.f}, 0.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 0.2f, 1.f);
-    // debug_box_ = world.CreateBox(Vec2{0, 0 } * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f);
+    // debug_box_ = world.CreateBox(Vec2{0.f, 0.f} * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f);
 
     // Floating obstacle objects.
-    // const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
-    // floating_circle_ = world.CreateCircle(floating_circle_pos, 0.0f,
-    //     {0.f, 0.f}, floating_objects_angular_vel_,
-    //     0.f, 2.f, floating_objects_restitution_, floating_objects_friction_);
-    //
-    // const Vec2 floating_box_pos = Vec2{static_cast<float>(w) / 4.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
-    // floating_box_ = world.CreateBox(floating_box_pos, 0.0f,
-    //     {0.f, 0.f}, floating_objects_angular_vel_,
-    //     0.f, 2.5f, 2.5f, floating_objects_restitution_, floating_objects_friction_);
-    //
+    const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    floating_circle_ = world.CreateCircle(floating_circle_pos, 0.0f,
+        {0.f, 0.f}, floating_objects_angular_vel_,
+        0.f, 2.f, floating_objects_restitution_, floating_objects_friction_);
+    
+    floating_circle2_ = world.CreateCircle({floating_circle_pos.x + 3, floating_circle_pos.y}, 0.0f,
+        {0.f, 0.f}, floating_objects_angular_vel_,
+        0.f, 2.f, floating_objects_restitution_, floating_objects_friction_);
+    
+    const Vec2 floating_box_pos = Vec2{static_cast<float>(w) / 4.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    floating_box_ = world.CreateBox(floating_box_pos, 0.0f,
+        {0.f, 0.f}, floating_objects_angular_vel_,
+        0.f, 2.5f, 2.5f, floating_objects_restitution_, floating_objects_friction_);
+    
     const Vec2 floating_wide_box_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_wide_box_1_ = world.CreateBox(floating_wide_box_pos, 0.0f,
         {0.f, 0.f}, floating_objects_angular_vel_,
@@ -304,6 +308,22 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
     ImGui::Separator();
     
     ImGui::Text("Floating Obstacles:");
+    if (ImGui::SliderFloat("Restitution##floating", &floating_objects_restitution_, 0.0f, 1.0f))
+    {
+        for (const auto& obj : floatings_)
+        {
+            if (!obj->IsValid()) continue;
+            world.SetRestitution(*obj, floating_objects_restitution_);
+        }
+    }
+    if (ImGui::SliderFloat("Friction##floating", &floating_objects_friction_, 0.0f, 1.0f))
+    {
+        for (const auto& obj : floatings_)
+        {
+            if (!obj->IsValid()) continue;
+            world.SetFriction(*obj, floating_objects_friction_);
+        }
+    }
     if (ImGui::Button("Reset Angular Velocity##floating"))
     {
         floating_objects_angular_vel_ = 0.f;
@@ -321,37 +341,22 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
             world.SetAngularVelocity(*obj, floating_objects_angular_vel_);
         }
     }
-    if (ImGui::SliderFloat("Restitution##floating", &floating_objects_restitution_, 0.0f, 1.0f))
-    {
-        for (const auto& obj : floatings_)
-        {
-            if (!obj->IsValid()) continue;
-            world.SetRestitution(*obj, floating_objects_restitution_);
-        }
-    }
-    if (ImGui::SliderFloat("Friction##floating", &floating_objects_friction_, 0.0f, 1.0f))
-    {
-        for (const auto& obj : floatings_)
-        {
-            if (!obj->IsValid()) continue;
-            world.SetFriction(*obj, floating_objects_friction_);
-        }
-    }
     ImGui::Separator();
     
     ImGui::Text("Next Spawned Circle (Left Mouse Button):");
-    ImGui::SliderFloat("Mass##c", &circle_spawn_mass_, 0.0f, 20.0f);
-    ImGui::SliderFloat("Radius##c", &circle_spawn_radius_, 0.5f, 3.0f);
     ImGui::SliderFloat("Restitution##c", &circle_spawn_restitution_, 0.0f, 1.0f);
     ImGui::SliderFloat("friction##c", &circle_spawn_friction_, 0.0f, 1.0f);
+    ImGui::SliderFloat("Mass##c", &circle_spawn_mass_, 0.0f, 20.0f);
+    ImGui::SliderFloat("Radius##c", &circle_spawn_radius_, 0.5f, 3.0f);
+    
     ImGui::Separator();
     
     ImGui::Text("Next Spawned Box (Right Mouse Button):");
+    ImGui::SliderFloat("Restitution##b", &box_spawn_restitution_, 0.0f, 1.0f);
+    ImGui::SliderFloat("friction##b", &box_spawn_friction_, 0.0f, 1.0f);
     ImGui::SliderFloat("Mass##b", &box_spawn_mass_, 0.0f, 20.0f);
     ImGui::SliderFloat("Half-Width##b", &box_spawn_half_width_, 0.1f, 3.0f);
     ImGui::SliderFloat("Half-Height##b", &box_spawn_half_height_, 0.1f, 3.0f);
-    ImGui::SliderFloat("Restitution##b", &box_spawn_restitution_, 0.0f, 1.0f);
-    ImGui::SliderFloat("friction##b", &box_spawn_friction_, 0.0f, 1.0f);
     ImGui::Separator();
     
     ImGui::Text("Debug Options:");

@@ -28,7 +28,7 @@ Aabb MortonBvh::ComputeFastAabbFromLocalAabb(const Vec2& pos, const float rot, c
     // World AABB
     const Vec2 world_aabb_min = world_center - world_extent;
     const Vec2 world_aabb_max = world_center + world_extent;
-    return Aabb{ world_aabb_min.x, world_aabb_min.y, world_aabb_max.x, world_aabb_max.y };
+    return Aabb{.min_x = world_aabb_min.x, .min_y = world_aabb_min.y, .max_x = world_aabb_max.x, .max_y = world_aabb_max.y };
 }
 
 uint32_t MortonBvh::ExpandBits(uint32_t bits)
@@ -122,6 +122,7 @@ void MortonBvh::Query(PhysicsWorld& world, size_t query_obj_idx) const
                     return (manifold.a == query_obj_idx && manifold.b == node.leaf_id)
                         || (manifold.b == query_obj_idx && manifold.a == node.leaf_id);
                 });
+                
                 if (it != world.manifolds_.end()) 
                 {
                     it->is_overlapping = true;

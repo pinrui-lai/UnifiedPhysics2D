@@ -19,6 +19,7 @@ public:
     
 private:
     BodyHandle floating_circle_{0xFFFFFFFF};
+    BodyHandle floating_circle2_{0xFFFFFFFF};
     BodyHandle floating_box_{0xFFFFFFFF};
     BodyHandle floating_wide_box_1_{0xFFFFFFFF};
     BodyHandle floating_wide_box_2_{0xFFFFFFFF};
@@ -30,7 +31,7 @@ private:
     BodyHandle debug_box_{0xFFFFFFFF};
     
     std::array<BodyHandle*, 4> boundaries_{&ceil_, &floor_, &left_wall_, &right_wall_ };
-    std::array<BodyHandle*, 4> floatings_{ &floating_circle_, &floating_box_, &floating_wide_box_1_, &floating_wide_box_2_};
+    std::array<BodyHandle*, 5> floatings_{ &floating_circle_, &floating_circle2_, &floating_box_, &floating_wide_box_1_, &floating_wide_box_2_};
     
     float floating_objects_angular_vel_{0.5f};
     float floating_objects_restitution_{0.2f};
