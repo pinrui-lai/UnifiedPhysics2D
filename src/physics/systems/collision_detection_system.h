@@ -1,6 +1,5 @@
 #pragma once
 
-#include <optional>
 #include <span>
 
 #include "types.h"
@@ -9,10 +8,10 @@ struct PolygonShape;
 struct BoxShape;
 class PhysicsWorld;
 
-class CollisionSystem
+class CollisionDetectionSystem
 {
 public:
-    static void SolveCollision(PhysicsWorld& world);
+    static void CheckCollision(PhysicsWorld& world);
     
 private:
     static void Gjk(PhysicsWorld& world, Manifold& manifold);
@@ -27,9 +26,4 @@ private:
     
     // (A X B) X C = B(A dot C) - A(B dot C)
     static Vec2 TripleProduct(const Vec2& a, const Vec2& b, const Vec2& c) {return b * a.Dot(c) - a * b.Dot(c); }
-    
-    static void InitializeContact(const PhysicsWorld& world, Manifold& manifold, size_t contact_idx);
-    static void WarmStartContact(PhysicsWorld& world, const Manifold& manifold, size_t contact_idx);
-    static void SolveVelocityConstraint(PhysicsWorld& world, Manifold& manifold, size_t contact_idx);
-    static void SolvePositionConstraint(PhysicsWorld& world, Manifold& manifold, size_t contact_idx);
 };

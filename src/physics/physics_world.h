@@ -6,8 +6,9 @@
 #include "components.h"
 #include "../physics_config.h"
 
+class CollisionSolverSystem;
+class CollisionDetectionSystem;
 class MovementSystem;
-class CollisionSystem;
 
 class PhysicsWorld
 {
@@ -58,6 +59,7 @@ public:
     std::vector<std::array<Vec2, 2>> debug_reference_edges_;
     
     friend MovementSystem;
-    friend CollisionSystem;
+    friend CollisionDetectionSystem;
+    friend CollisionSolverSystem;
     friend MortonBvh;
 };

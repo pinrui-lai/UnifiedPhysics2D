@@ -6,10 +6,11 @@
 #include <imgui_impl_sdlrenderer3.h>
 
 #include "Application.h"
+#include "collision_detection_system.h"
+#include "collision_solver_system.h"
 #include "physics_config.h"
-#include "physics/systems/collision_system.h"
-#include "physics/systems/movement_system.h"
-#include "physics/physics_world.h"
+#include "movement_system.h"
+#include "physics_world.h"
 
 void Application::CreateInitialObjects(SDL_Window* window, PhysicsWorld& world)
 {
@@ -164,7 +165,9 @@ void Application::Update(PhysicsWorld& world, const float dt)
 {
     MovementSystem::ApplyGravity(world);
     MovementSystem::IntegrateVelocity(world, dt);
-    CollisionSystem::SolveCollision(world);
+    // CollisionSystem::SolveCollision(world);
+    CollisionDetectionSystem::CheckCollision(world);
+    CollisionSolverSystem::SolveCollision(world);
     MovementSystem::IntegratePosition(world, dt);
 }
 
