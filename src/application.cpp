@@ -163,12 +163,7 @@ void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& worl
 
 void Application::Update(PhysicsWorld& world, const float dt)
 {
-    MovementSystem::ApplyGravity(world);
-    MovementSystem::IntegrateVelocity(world, dt);
-    // CollisionSystem::SolveCollision(world);
-    CollisionDetectionSystem::CheckCollision(world);
-    CollisionSolverSystem::SolveCollision(world);
-    MovementSystem::IntegratePosition(world, dt);
+    world.Step(dt);
 }
 
 namespace 

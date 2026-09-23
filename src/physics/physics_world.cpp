@@ -1,6 +1,9 @@
-#include "physics_world.h"
-
 #include <algorithm>
+
+#include "physics_world.h"
+#include "movement_system.h"
+#include "collision_solver_system.h"
+#include "collision_detection_system.h"
 
 BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float inertia, float restitution, float friction)
 {
@@ -22,7 +25,6 @@ BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2&
 
 BodyHandle PhysicsWorld::CreateCircle(const Vec2& pos, const float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float radius, const float restitution, const float friction)
 {
-    Aabb aabb{-radius, -radius, radius, radius};
     local_aabbs_.emplace_back(-radius, -radius, radius, radius);
     shapes_.push_back(CircleShape{radius});
     const float inertia = 0.5f * mass * radius * radius;
@@ -60,6 +62,69 @@ BodyHandle PhysicsWorld::CreatePolygon(const Vec2& pos, const float rotation, co
 void PhysicsWorld::ApplyForce(const BodyHandle handle, const Vec2& force)
 {
     rigid_bodies_[handle.id].force += force;
+}
+
+void PhysicsWorld::ApplyGravity()
+{
+    for (auto& rigid_body : rigid_bodies_)
+    {
+        rigid_body.force += Vec2{0.0f, gravity_} * rigid_body.mass;
+    }
+}
+
+void PhysicsWorld::Step(const float dt)
+{
+    constexpr int sub_steps = 4;
+    const float sub_dt = dt / static_cast<float>(sub_steps);
+    constexpr int velocity_iterations = 2;
+    constexpr int position_iterations = 2;
+    
+    for (int sub = 0; sub < sub_steps; ++sub)
+    {
+        ApplyGravity();
+        MovementSystem::IntegrateVelocity(*this, sub_dt);
+        CollisionDetectionSystem::CheckCollision(*this);
+
+        for (auto& manifold : manifolds_)
+        {
+            for (int i = 0; i < manifold.contact_count; ++i)
+            {
+                CollisionSolverSystem::InitializeContact(*this, manifold, i);        
+            }
+        }
+        
+        for (auto& manifold : manifolds_)
+        {
+            for (int i = 0; i < manifold.contact_count; ++i)
+            {
+                CollisionSolverSystem::WarmStartContact(*this, manifold, i);        
+            }
+        }
+        
+        for (int iter = 0; iter < velocity_iterations; ++iter)
+        {
+            for (auto& manifold : manifolds_)
+            {
+                for (int i = 0; i < manifold.contact_count; ++i)
+                {
+                    CollisionSolverSystem::SolveVelocityConstraint(*this, manifold, i);        
+                }
+            }
+        }
+        
+        for (int iter = 0; iter < position_iterations; ++iter)
+        {
+            for (auto& manifold : manifolds_)
+            {
+                for (int i = 0; i < manifold.contact_count; ++i)
+                {
+                    CollisionSolverSystem::SolvePositionConstraint(*this, manifold, i);      
+                }
+            }
+        }
+
+        MovementSystem::IntegratePosition(*this, sub_dt);
+    }
 }
 
 void PhysicsWorld::SetPosition(const BodyHandle handle, const Vec2& pos)

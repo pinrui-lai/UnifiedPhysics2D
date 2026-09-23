@@ -8,7 +8,7 @@ class Application
 public:
     void CreateInitialObjects(SDL_Window* window, PhysicsWorld& world);
     void Input(SDL_Window* window, bool &is_running, PhysicsWorld& world);
-    void Update(PhysicsWorld& world, const float dt);
+    static void Update(PhysicsWorld& world, float dt);
     void Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world);
     void RenderPhysicsControlPanel(PhysicsWorld& world);
     static ImU32 GetDepthColor(int depth, float alpha = 1.0f);

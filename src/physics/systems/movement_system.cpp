@@ -33,10 +33,3 @@ void MovementSystem::IntegratePosition(PhysicsWorld& world, const float dt)
     }
 }
 
-void MovementSystem::ApplyGravity(PhysicsWorld& world)
-{
-    for (auto& rigid_body : world.rigid_bodies_)
-    {
-        rigid_body.force += Vec2{0.0f, world.gravity_} * rigid_body.mass;
-    }
-}

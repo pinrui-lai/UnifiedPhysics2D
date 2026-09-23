@@ -36,6 +36,8 @@ public:
     BodyHandle CreateBox(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float half_width, float half_height, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreatePolygon(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, const std::vector<Vec2>& vertices, float restitution = 0.1f, float friction = 0.1f);
     void ApplyForce(BodyHandle handle, const Vec2& force);
+    void ApplyGravity();
+    void Step(float dt);
     
     const std::vector<PositionComponent>& GetPositions() { return positions_; }
     const std::vector<RotationComponent>& GetRotations() { return rotations_; }
