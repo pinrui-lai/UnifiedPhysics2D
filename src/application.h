@@ -51,7 +51,7 @@ private:
     float box_spawn_restitution_{0.2f};
     float box_spawn_friction_{0.2f};
     
-    float arrow_key_force_{500.f};
+    float arrow_key_force_{1000.f};
     bool draw_bvh_{false};
     int bvh_draw_max_depth_{5};
 };

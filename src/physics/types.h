@@ -87,10 +87,57 @@ struct Manifold
     Manifold(const size_t a, const size_t b) : a(a), b(b){}
 };
 
+struct XpbdDistanceConstraint
+{
+    size_t p1;
+    size_t p2;
+    float rest_length;
+    float compliance;
+    float lambda{0.0f};
+};
+
+// Rigid-Particle Collision Constraint
+struct XpbdContactConstraint
+{
+    size_t particle_idx;
+    size_t body_idx;
+    Vec2 contact_normal;
+    Vec2 contact_point;
+    float depth;
+    float compliance{0.0f};
+    float lambda{0.0f};
+};
+
+struct XpbdTriangleAreaConstraint
+{
+    size_t p1, p2, p3; // Clockwise
+    float rest_area;
+    float compliance{0.0f};
+    float lambda{0.0f};
+};
+
+struct XpbdGlobalAreaConstraint
+{
+    // Particles arranged clockwise. 
+    size_t start_particle_idx{0};
+    size_t particle_count{0};
+    float rest_area;
+    float compliance{0.0f};
+    float lambda{0.0f};
+};
+
 struct BodyHandle
 {
     size_t id;
     bool IsValid() const { return id != 0xFFFFFFFF; }
+};
+
+struct SoftBodyHandle
+{
+    size_t start_particle_idx{0};
+    size_t particle_count{0};
+    
+    bool IsValid() const { return particle_count > 0; }
 };
 
 template <typename T, size_t Capacity>
@@ -173,7 +220,7 @@ class MortonBvh
 {
 public:
     void Build(PhysicsWorld& world);
-    void Query(PhysicsWorld& world, size_t query_obj_idx) const;
+    void Query(PhysicsWorld& world, size_t query_obj_idx);
     
 private:
     std::vector<BvhNode> nodes_;
@@ -185,5 +232,9 @@ private:
     static uint32_t GetMortonCode(const Vec2& pos, float min_x, float min_y, float max_x, float max_y);
     size_t BuildRecursive(std::pmr::vector<Item>& items, const std::vector<Aabb>& world_aabbs, size_t start, size_t end);
     
+    bool CheckRigidParticleCollision(PhysicsWorld& world, size_t query_obj_idx, size_t particle_idx, XpbdContactConstraint& out_constraint);
+    static float SdfCircle(Vec2 p, float r) { return p.Length() - r; }
+    float SdfBox(Vec2 p, Vec2 b) const;
+    Vec2 GetBoxNormal(Vec2 p, Vec2 b);
     friend PhysicsWorld;
 };

@@ -7,9 +7,7 @@
 
 #include "Application.h"
 #include "collision_detection_system.h"
-#include "collision_solver_system.h"
 #include "physics_config.h"
-#include "movement_system.h"
 #include "physics_world.h"
 
 void Application::CreateInitialObjects(SDL_Window* window, PhysicsWorld& world)
@@ -21,6 +19,11 @@ void Application::CreateInitialObjects(SDL_Window* window, PhysicsWorld& world)
     // debug_circle_ = world.CreateCircle(Vec2{0.f, 0.f}, 0.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 0.2f, 1.f);
     // debug_box_ = world.CreateBox(Vec2{0.f, 0.f} * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f);
 
+    // XPBD soft rope.
+    const Vec2 rope_start_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) - 1.5f * physics_config::kPpm} * physics_config::kMpp;
+    const Vec2 rope_end_pos{rope_start_pos.x, rope_start_pos.y - 10.f};
+    // SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.000000f);
+    
     // Floating obstacle objects.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_circle_ = world.CreateCircle(floating_circle_pos, 0.0f,
@@ -89,28 +92,24 @@ void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& worl
         // Keyboard event.
         if (!io.WantCaptureKeyboard && event.type == SDL_EVENT_KEY_DOWN)
         {
-            for (size_t i = 0; i < world.GetPositions().size(); i++)
-            {
-                switch (event.key.key) {
-                case SDLK_ESCAPE:
-                    is_running = false;
-                    break;
-                case SDLK_RIGHT:
-                    world.ApplyForce({i}, {arrow_key_force_, 0.f});
-                    break;
-                case SDLK_LEFT:
-                    world.ApplyForce({i}, {-arrow_key_force_, 0.f});
-                    break;
-                case SDLK_UP:
-                    world.ApplyForce({i}, {0.f, arrow_key_force_});
-                    break;
-                case SDLK_DOWN:
-                    world.ApplyForce({i}, {0.f, -arrow_key_force_});
-                    break;
-                default: break;
-                }
+            switch (event.key.key) {
+            case SDLK_ESCAPE:
+                is_running = false;
+                break;
+            case SDLK_RIGHT:
+                world.ApplyForceToAll({arrow_key_force_, 0.f});
+                break;
+            case SDLK_LEFT:
+                world.ApplyForceToAll({-arrow_key_force_, 0.f});
+                break;
+            case SDLK_UP:
+                world.ApplyForceToAll({0.f, arrow_key_force_});
+                break;
+            case SDLK_DOWN:
+                world.ApplyForceToAll({0.f, -arrow_key_force_});
+                break;
+            default: break;
             }
-            
         }
         
         // Mouse button event.
@@ -127,12 +126,14 @@ void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& worl
             } 
             else if (event.button.button == SDL_BUTTON_RIGHT) 
             {
-                world.CreateBox(
-                    Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp,
-                    0.f, {0.f, 0.f}, 0.0f,
-                    box_spawn_mass_, box_spawn_half_width_, box_spawn_half_height_,
-                    box_spawn_restitution_, box_spawn_friction_
-                );
+                // world.CreateBox(
+                //     Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp,
+                //     0.f, {0.f, 0.f}, 0.0f,
+                //     box_spawn_mass_, box_spawn_half_width_, box_spawn_half_height_,
+                //     box_spawn_restitution_, box_spawn_friction_
+                // );
+                // world.CreateSoftBox(Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp, 2.f, 2.f, 5, 5, 15.f, 0.0000000f);
+                world.CreatePressureSoftCircle(Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp, 1.5f, 20, 15.f, 0.0000000f);
             }
         }
         
@@ -191,6 +192,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     // const auto& vertices = world.GetVertices();
     const auto& shapes = world.GetShapes();
     
+    // ==== Rigid Body ====
     for (int i = 0; i < shapes.size(); i++)
     {
         std::visit(Overload {
@@ -232,6 +234,22 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
             }, shapes[i]);
     }
     
+    // ==== Soft Body ====
+    const auto& particle_positions = world.GetParticlePositions();
+    for (const auto& particle_position : particle_positions)
+    {
+        ImVec2 pos{particle_position.x * physics_config::kPpm, float_h - particle_position.y * physics_config::kPpm};
+        draw_list->AddCircleFilled(pos, 5.0f, IM_COL32(255, 0, 0, 255));
+    }
+    
+    for (const auto& constraint : world.GetDistanceConstraints())
+    {
+        ImVec2 p0(particle_positions[constraint.p1].x * physics_config::kPpm, float_h - particle_positions[constraint.p1].y * physics_config::kPpm);
+        ImVec2 p1(particle_positions[constraint.p2].x * physics_config::kPpm, float_h - particle_positions[constraint.p2].y * physics_config::kPpm);
+        draw_list->AddLine(p0, p1, IM_COL32(255, 0, 0, 255), 2.0f);
+    }
+    
+    // ==== Debug Option ====
     for (const auto& incident_edge : world.debug_incident_edges_)
     {
         ImVec2 p0(incident_edge[0].x * physics_config::kPpm, float_h - incident_edge[0].y * physics_config::kPpm);

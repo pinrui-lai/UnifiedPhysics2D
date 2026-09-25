@@ -8,9 +8,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
 {
     world.debug_incident_edges_.clear();
     world.debug_reference_edges_.clear();
-    
-    world.frame_arena_.release();
-    
+        
     // Mark all manifold's is_overlapping false.
     for (auto& manifold : world.manifolds_)
     {

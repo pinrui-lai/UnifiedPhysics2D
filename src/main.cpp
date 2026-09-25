@@ -41,14 +41,16 @@ int main(int argc, char* argv[]) {
     application.CreateInitialObjects(window, world);
     
     Uint64 last_time = SDL_GetPerformanceCounter();
+    constexpr float max_delta_time = 1.f / 60.f;
     // Game Loop.
     while (is_running) {
         const Uint64 current_time = SDL_GetPerformanceCounter();
-        const float delta_time = static_cast<float>(current_time - last_time) / static_cast<float>(SDL_GetPerformanceFrequency());
+        float delta_time = static_cast<float>(current_time - last_time) / static_cast<float>(SDL_GetPerformanceFrequency());
+        delta_time = std::min(max_delta_time, delta_time);
         last_time = current_time;
         
         application.Input(window, is_running, world);
-        application.Update(world, delta_time);
+        Application::Update(world, delta_time);
         application.Render(renderer, window, world);
     }
     

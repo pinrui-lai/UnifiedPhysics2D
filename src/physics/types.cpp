@@ -56,12 +56,18 @@ uint32_t MortonBvh::GetMortonCode(const Vec2& pos, const float min_x, const floa
 
 void MortonBvh::Build(PhysicsWorld& world)
 {
-    if (world.positions_.size() == 0) return;
+    const size_t rigid_count = world.positions_.size();
+    const size_t soft_count = world.soft_body_handles_.size();
+    const size_t total_count = rigid_count + soft_count;
+    
+    if (total_count == 0) return;
+    
     nodes_.clear();
     world_aabbs_.clear();
+    world_aabbs_.reserve(total_count);
     
-    // Get all world AABB.
-    for (auto i = 0; i < world.positions_.size(); ++i)
+    // Rigid Body world AABBs.
+    for (auto i = 0; i < world.local_aabbs_.size(); ++i)
     {
         std::visit([&](auto& s)
         {
@@ -82,6 +88,25 @@ void MortonBvh::Build(PhysicsWorld& world)
         }, world.shapes_[i]);
     }
     
+    // XPBD Soft Body world AABBs.
+    for (size_t i = 0; i < soft_count; ++i)
+    {
+        float min_x = std::numeric_limits<float>::max();
+        float min_y = std::numeric_limits<float>::max();
+        float max_x = std::numeric_limits<float>::min();
+        float max_y = std::numeric_limits<float>::min();
+        
+        for (const auto& pos : world.GetSoftBodyParticlePositions(i))
+        {
+            min_x = std::min(min_x, pos.x);
+            min_y = std::min(min_y, pos.y);
+            max_x = std::max(max_x, pos.x);
+            max_y = std::max(max_y, pos.y);
+        }
+
+        world_aabbs_.emplace_back(min_x - 0.05f, min_y - 0.05f, max_x + 0.05f, max_y + 0.05f);
+    }
+    
     // Get Scene Bounding Box (boundary of all objects in the world).
     Aabb scene_aabb = world_aabbs_[0];
     for (const auto& world_aabb : world_aabbs_) {
@@ -90,9 +115,18 @@ void MortonBvh::Build(PhysicsWorld& world)
 
     // Get Morton Code and create sort item.
     std::pmr::vector<Item> items(&world.frame_arena_);
-    for (auto i = 0; i < world.positions_.size(); ++i)
+    items.reserve(total_count);
+    
+    for (size_t i = 0; i < rigid_count; ++i)
     {
         items.emplace_back(i, GetMortonCode(world.positions_[i].val, scene_aabb.min_x, scene_aabb.min_y, scene_aabb.max_x, scene_aabb.max_y));
+    }
+    for (size_t i = 0; i < soft_count; ++i)
+    {
+        const size_t unified_idx = rigid_count + i;
+        auto& [min_x, min_y, max_x, max_y] = world_aabbs_[unified_idx];
+        auto center = Vec2{(max_x - min_x) * 0.5f, (max_y - min_y) * 0.5f};
+        items.emplace_back(unified_idx, GetMortonCode(center, scene_aabb.min_x, scene_aabb.min_y, scene_aabb.max_x, scene_aabb.max_y));
     }
     
     // Sort by morton code.
@@ -101,9 +135,13 @@ void MortonBvh::Build(PhysicsWorld& world)
     root_index_ = BuildRecursive(items, world_aabbs_, 0, items.size());
 }
 
-void MortonBvh::Query(PhysicsWorld& world, size_t query_obj_idx) const
+void MortonBvh::Query(PhysicsWorld& world, size_t query_obj_idx)
 {
     if (root_index_ == std::numeric_limits<size_t>::max()) return;
+    
+    const size_t rigid_count = world.positions_.size();
+    if (query_obj_idx >= rigid_count) return; // No Soft to Soft query
+    
     std::pmr::vector<size_t> stack(&world.frame_arena_);
     stack.reserve(64);
     stack.push_back(root_index_);
@@ -115,21 +153,41 @@ void MortonBvh::Query(PhysicsWorld& world, size_t query_obj_idx) const
         const BvhNode& node = nodes_[curr];
         if (Aabb::Overlap(node.aabb, world_aabbs_[query_obj_idx])) {
             if (node.IsLeaf()) {
-                if (node.leaf_id == query_obj_idx) continue;
-
-                auto it = std::ranges::find_if(world.manifolds_, [&](const Manifold& manifold)
-                {
-                    return (manifold.a == query_obj_idx && manifold.b == node.leaf_id)
-                        || (manifold.b == query_obj_idx && manifold.a == node.leaf_id);
-                });
+                const size_t leaf_id = node.leaf_id;
                 
-                if (it != world.manifolds_.end()) 
+                // Rigid vs Rigid
+                if (leaf_id < rigid_count)
                 {
-                    it->is_overlapping = true;
+                    if (node.leaf_id == query_obj_idx) continue;
+                
+                    auto it = std::ranges::find_if(world.manifolds_, [&](const Manifold& manifold)
+                    {
+                        return (manifold.a == query_obj_idx && manifold.b == node.leaf_id)
+                            || (manifold.b == query_obj_idx && manifold.a == node.leaf_id);
+                    });
+                
+                    if (it != world.manifolds_.end()) {
+                        it->is_overlapping = true;
+                    }
+                    else{
+                        world.manifolds_.emplace_back(query_obj_idx, node.leaf_id);
+                    }
                 }
+                // Rigid bs Soft
                 else
                 {
-                    world.manifolds_.emplace_back(query_obj_idx, node.leaf_id);
+                    const size_t soft_idx = leaf_id - rigid_count;
+                    for (size_t i = 0; i < world.soft_body_handles_[soft_idx].particle_count; ++i)
+                    {
+                        size_t particle_idx = world.soft_body_handles_[soft_idx].start_particle_idx + i;
+                        
+                        // Call Narrow-Phase for Rigid vs Soft particles(SDF).
+                        XpbdContactConstraint contact;
+                        if (CheckRigidParticleCollision(world, query_obj_idx, particle_idx, contact)){
+                            world.soft_rigid_contacts_.push_back(contact);
+                        }
+                    }
+                    
                 }
             } 
             else
@@ -170,4 +228,79 @@ size_t MortonBvh::BuildRecursive(std::pmr::vector<Item>& items, const std::vecto
     nodes_[node_index].right_child = right_node_index;
     
     return node_index;
+}
+
+namespace 
+{
+    template<class... Ts> struct Overload : Ts... { using Ts::operator()...; };    
+}
+bool MortonBvh::CheckRigidParticleCollision(PhysicsWorld& world, const size_t query_obj_idx, const size_t particle_idx,
+    XpbdContactConstraint& out_constraint)
+{
+    Shape& shape = world.shapes_[query_obj_idx];
+    return std::visit(Overload{
+        [&](const BoxShape& b)
+        {
+            const float s = std::sin(world.rotations_[query_obj_idx].val);
+            const float c = std::cos(world.rotations_[query_obj_idx].val);
+            
+            Vec2 p_pos_map_to_box = world.particle_positions_[particle_idx] - world.positions_[query_obj_idx].val;
+            p_pos_map_to_box = {p_pos_map_to_box.x * c + p_pos_map_to_box.y * s , - p_pos_map_to_box.x * s + p_pos_map_to_box.y * c};
+            const float depth = SdfBox(p_pos_map_to_box, {b.half_width, b.half_height});
+            if (depth >= 0.f) return false;
+            
+            out_constraint.particle_idx = particle_idx;
+            out_constraint.body_idx = query_obj_idx;
+            out_constraint.depth = -depth;
+
+            const Vec2 local_normal = GetBoxNormal(p_pos_map_to_box, {b.half_width, b.half_height});
+            out_constraint.contact_normal = Vec2{local_normal.x * c - local_normal.y * s, local_normal.x * s + local_normal.y * c} ;
+            out_constraint.contact_point = world.particle_positions_[particle_idx] + out_constraint.contact_normal * out_constraint.depth;
+            
+            return true;
+        },
+        [&](const CircleShape& c)
+        {
+            const Vec2 p_pos_map_to_circle = world.particle_positions_[particle_idx] - world.positions_[query_obj_idx].val;
+            const float depth = SdfCircle(p_pos_map_to_circle, c.radius);
+            if (depth >= 0.f) return false;
+            
+            out_constraint.particle_idx = particle_idx;
+            out_constraint.body_idx = query_obj_idx;
+            out_constraint.depth = -depth;
+            out_constraint.contact_normal = p_pos_map_to_circle.Normalized() ;
+            out_constraint.contact_point = world.particle_positions_[particle_idx] + out_constraint.contact_normal * out_constraint.depth;
+        
+            return true;
+        },
+        [&](const PolygonShape& p){ return false; },
+    }, shape);
+}
+
+float MortonBvh::SdfBox(const Vec2 p, const Vec2 b) const
+{
+    // Map the point to the first quadrant.
+    const Vec2 d = { std::abs(p.x) - b.x, std::abs(p.y) - b.y };
+
+    // External distance (point outside the rectangle corner or boundary)
+    const Vec2 outside_vec = { std::max(d.x, 0.0f), std::max(d.y, 0.0f) };
+    const float outside_dist = outside_vec.Length();
+
+    // Interior distance (negative value if the point is inside the rectangle)
+    const float inside_dist = std::min(std::max(d.x, d.y), 0.0f);
+
+    return outside_dist + inside_dist;
+}
+
+Vec2 MortonBvh::GetBoxNormal(const Vec2 p, const Vec2 b)
+{
+    const Vec2 d = { std::abs(p.x) - b.x, std::abs(p.y) - b.y };
+    // Inside the box, the shortest separation direction is perpendicular to the nearest edge.
+    Vec2 n = (d.x > d.y) ? Vec2{1.0f, 0.0f} : Vec2{0.0f, 1.0f};
+    
+    // Map to the quadrant where point p is located.
+    if (p.x < 0.0f) n.x = -n.x;
+    if (p.y < 0.0f) n.y = -n.y;
+
+    return n;
 }
