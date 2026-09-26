@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
     Application application;
     
     // Create floor, walls and floating obstacles.
-    application.CreateInitialObjects(window, world);
+    application.CreateInitialBodies(window, world);
     
     Uint64 last_time = SDL_GetPerformanceCounter();
     constexpr float max_delta_time = 1.f / 60.f;

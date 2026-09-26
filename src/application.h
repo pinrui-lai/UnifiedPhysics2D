@@ -3,14 +3,26 @@
 
 class PhysicsWorld;
 
+enum class SpawnType {
+    RigidCircle = 0,
+    RigidBox,
+    SoftRope,
+    SoftBox,
+    SoftCircleArea,
+    SoftCirclePressure
+};
+
 class Application
 {
 public:
-    void CreateInitialObjects(SDL_Window* window, PhysicsWorld& world);
+    void CreateInitialBodies(SDL_Window* window, PhysicsWorld& world);
     void Input(SDL_Window* window, bool &is_running, PhysicsWorld& world);
     static void Update(PhysicsWorld& world, float dt);
     void Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world);
     void RenderPhysicsControlPanel(PhysicsWorld& world);
+    void SpawnBodyAt(PhysicsWorld& world, SpawnType type, Vec2 spawn_pos) const;
+    void RenderSpawnTypeConfigUi(SpawnType type);
+    
     static ImU32 GetDepthColor(int depth, float alpha = 1.0f);
     static void DrawBvhNode(ImDrawList* draw_list, const std::vector<BvhNode>& nodes, int node_idx, int current_depth, int max_render_depth, int& hovered_node_idx, float window_height);
     static void RenderBvhDebug(const std::vector<BvhNode>& nodes, int root_idx, int max_render_depth, float window_height);
@@ -18,6 +30,7 @@ public:
     static bool AabbContains(const Aabb& aabb, const ImVec2 p) { return p.x >= aabb.min_x && p.x <= aabb.max_x && p.y >= aabb.min_y && p.y <= aabb.max_y; }
     
 private:
+    // ===== Handles =====
     BodyHandle floating_circle_{0xFFFFFFFF};
     BodyHandle floating_circle2_{0xFFFFFFFF};
     BodyHandle floating_box_{0xFFFFFFFF};
@@ -33,25 +46,62 @@ private:
     std::array<BodyHandle*, 4> boundaries_{&ceil_, &floor_, &left_wall_, &right_wall_ };
     std::array<BodyHandle*, 5> floatings_{ &floating_circle_, &floating_circle2_, &floating_box_, &floating_wide_box_1_, &floating_wide_box_2_};
     
-    float floating_objects_angular_vel_{0.5f};
-    float floating_objects_restitution_{0.2f};
-    float floating_objects_friction_{0.2f};
+    // ===== Scene Bodies Setting =====
+    float floating_bodies_angular_vel_{0.5f};
+    float floating_bodies_restitution_{0.2f};
+    float floating_bodies_friction_{0.2f};
     
     float boundary_restitution_{0.2f};
     float boundary_friction_{0.2f};
     
+    // ===== Mouse Spawn Settings =====
+    SpawnType left_click_spawn_type_{SpawnType::RigidBox};
+    SpawnType right_click_spawn_type_{SpawnType::SoftCirclePressure};
+    
+    // Rigid Circle
     float circle_spawn_mass_{5.f};
     float circle_spawn_radius_{1.f};
     float circle_spawn_restitution_{0.2f};
     float circle_spawn_friction_{0.2f};
     
+    // Rigid Box
     float box_spawn_mass_{5.f};
     float box_spawn_half_width_{1.f};
     float box_spawn_half_height_{1.f};
     float box_spawn_restitution_{0.2f};
     float box_spawn_friction_{0.2f};
     
-    float arrow_key_force_{1000.f};
+    // Soft Rope
+    bool fix_start_{true};
+    bool fix_end_{false};
+    bool is_horizontal_{false};
+    float rope_spawn_length_{5.f};
+    int rope_spawn_num_segments_{20};
+    float rope_spawn_mass_{5.f};
+    float rope_spawn_compliance_{0.0000000f};
+
+    // Soft Box (Triangle Area)
+    float soft_box_spawn_width_{2.f};
+    float soft_box_spawn_height_{2.f};
+    int soft_box_spawn_nx_{5};
+    int soft_box_spawn_ny_{5};
+    float soft_box_spawn_mass_{5.f};
+    float soft_box_spawn_compliance_{0.0000000f};
+
+    // Soft Circle (Triangle Area)
+    float soft_circle_spawn_radius_{1.5f};
+    int soft_circle_spawn_num_segments_{20};
+    float soft_circle_spawn_mass_{10.f};
+    float soft_circle_spawn_compliance_{0.0000000f};
+
+    // Soft Circle (Pressure)
+    float pressure_circle_spawn_radius_{1.5f};
+    int pressure_circle_spawn_num_segments_{20};
+    float pressure_circle_spawn_mass_{10.f};
+    float pressure_circle_spawn_compliance_{0.0000000f};
+    
+    // ===== Others =====
+    float arrow_key_force_{800.f};
     bool draw_bvh_{false};
     int bvh_draw_max_depth_{5};
 };

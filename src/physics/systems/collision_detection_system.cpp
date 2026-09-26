@@ -1,11 +1,13 @@
-#include "collision_detection_system.h"
-
 #include <algorithm>
 
+#include "collision_detection_system.h"
 #include "physics_world.h"
 
 void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
 {
+    using Clock = std::chrono::high_resolution_clock;
+    using Duration = std::chrono::duration<double, std::milli>;
+    
     world.debug_incident_edges_.clear();
     world.debug_reference_edges_.clear();
         
@@ -15,7 +17,8 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
         manifold.is_overlapping = false;
     }
     
-    // Broad-Phase.
+    // ===== Broad-Phase =====
+    auto start = Clock::now();
     world.bvh_tree_.Build(world);
     const size_t count = world.positions_.size();
     for (size_t i = 0; i < count; ++i)
@@ -28,8 +31,10 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     {
         return manifold.is_overlapping == false;
     });
+    world.profile_data_.broad_phase_ms += Duration(Clock::now() - start).count();
     
-    // Narrow-Phase.
+    // ===== Narrow-Phase =====
+    start = Clock::now();
     for (auto& manifold : world.manifolds_)
     {
         if (world.rigid_bodies_[manifold.a].mass == 0.0f && world.rigid_bodies_[manifold.b].mass == 0.0f) continue;
@@ -59,8 +64,8 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
             }
         }
     }
+    world.profile_data_.narrow_phase_ms += Duration(Clock::now() - start).count();
 }
-
 
 void CollisionDetectionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
 {

@@ -1,9 +1,6 @@
 #include <algorithm>
 
 #include "physics_world.h"
-
-#include <numbers>
-
 #include "movement_system.h"
 #include "collision_solver_system.h"
 #include "collision_detection_system.h"
@@ -320,6 +317,10 @@ void PhysicsWorld::ApplyGravity()
 
 void PhysicsWorld::Step(const float dt)
 {
+    using Clock = std::chrono::high_resolution_clock;
+    using Duration = std::chrono::duration<double, std::milli>;
+    profile_data_.Reset();
+    
     constexpr int sub_steps = 3;
     const float sub_dt = dt / static_cast<float>(sub_steps);
     const float inv_sdt_sq = 1 / (sub_dt * sub_dt);
@@ -339,6 +340,7 @@ void PhysicsWorld::Step(const float dt)
         
         CollisionDetectionSystem::CheckCollision(*this);
 
+        auto start = Clock::now();
         for (int i = 0; i < xpbd_iterations; ++i)
         {
             XpbdSolver::SolveDistanceConstraints(*this, inv_sdt_sq);
@@ -346,7 +348,9 @@ void PhysicsWorld::Step(const float dt)
             XpbdSolver::SolveGlobalAreaConstraints(*this, inv_sdt_sq);
             XpbdSolver::SolveCollisionConstraints(*this, inv_sdt_sq);
         }
+        profile_data_.solve_xpbd_constraints_ms += Duration(Clock::now() - start).count();
         
+        start = Clock::now();
         for (auto& manifold : manifolds_)
         {
             for (int i = 0; i < manifold.contact_count; ++i)
@@ -384,13 +388,14 @@ void PhysicsWorld::Step(const float dt)
                 }
             }
         }
+        profile_data_.solve_si_constraints_ms += Duration(Clock::now() - start).count();
 
         MovementSystem::IntegratePosition(*this, sub_dt);
         XpbdSolver::FinalizeParticles(*this, 1.f/sub_dt);
     }
 }
 
-std::span<Vec2> PhysicsWorld::GetSoftBodyParticlePositions(size_t i)
+std::span<Vec2> PhysicsWorld::GetSoftBodyParticlePositions(const size_t i)
 {
     const SoftBodyHandle& soft_body_handle = soft_body_handles_[i];
     return std::span(particle_positions_).subspan(soft_body_handle.start_particle_idx, soft_body_handle.particle_count);

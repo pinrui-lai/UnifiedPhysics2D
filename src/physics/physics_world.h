@@ -12,6 +12,20 @@ class CollisionSolverSystem;
 class CollisionDetectionSystem;
 class MovementSystem;
 
+struct PhysicsProfileData {
+    double broad_phase_ms = 0.0;
+    double narrow_phase_ms = 0.0;
+    double solve_xpbd_constraints_ms = 0.0;
+    double solve_si_constraints_ms = 0.0;
+
+    void Reset() {
+        broad_phase_ms = 0.0;
+        narrow_phase_ms = 0.0;
+        solve_xpbd_constraints_ms = 0.0;
+        solve_si_constraints_ms = 0.0;
+    }
+};
+
 class PhysicsWorld
 {
 private:
@@ -72,6 +86,7 @@ public:
     const std::vector<Manifold>& GetManifolds() { return manifolds_; }
     const std::vector<Vec2>& GetParticlePositions() { return particle_positions_; }
     const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
+    const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }
     void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id].val = angular_vel; }
@@ -86,6 +101,7 @@ public:
     bool show_debug_clipping_ = true;
     std::vector<std::array<Vec2, 2>> debug_incident_edges_;
     std::vector<std::array<Vec2, 2>> debug_reference_edges_;
+    PhysicsProfileData profile_data_;
     
     friend MovementSystem;
     friend CollisionDetectionSystem;

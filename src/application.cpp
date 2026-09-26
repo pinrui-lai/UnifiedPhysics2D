@@ -10,43 +10,43 @@
 #include "physics_config.h"
 #include "physics_world.h"
 
-void Application::CreateInitialObjects(SDL_Window* window, PhysicsWorld& world)
+void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
 {
     int w, h;
     SDL_GetWindowSize(window, &w, &h);
     
-    // Small object for debug (check contact info).
+    // Small body for debug (check contact info).
     // debug_circle_ = world.CreateCircle(Vec2{0.f, 0.f}, 0.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 0.2f, 1.f);
     // debug_box_ = world.CreateBox(Vec2{0.f, 0.f} * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f);
 
     // XPBD soft rope.
     const Vec2 rope_start_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) - 1.5f * physics_config::kPpm} * physics_config::kMpp;
-    const Vec2 rope_end_pos{rope_start_pos.x, rope_start_pos.y - 10.f};
-    // SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.000000f);
+    const Vec2 rope_end_pos{rope_start_pos.x, rope_start_pos.y - 5.f};
+    SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.000000f);
     
-    // Floating obstacle objects.
+    // Floating obstacle Bodies.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_circle_ = world.CreateCircle(floating_circle_pos, 0.0f,
-        {0.f, 0.f}, floating_objects_angular_vel_,
-        0.f, 2.f, floating_objects_restitution_, floating_objects_friction_);
+        {0.f, 0.f}, floating_bodies_angular_vel_,
+        0.f, 2.f, floating_bodies_restitution_, floating_bodies_friction_);
     
     floating_circle2_ = world.CreateCircle({floating_circle_pos.x + 3, floating_circle_pos.y}, 0.0f,
-        {0.f, 0.f}, floating_objects_angular_vel_,
-        0.f, 2.f, floating_objects_restitution_, floating_objects_friction_);
+        {0.f, 0.f}, floating_bodies_angular_vel_,
+        0.f, 2.f, floating_bodies_restitution_, floating_bodies_friction_);
     
     const Vec2 floating_box_pos = Vec2{static_cast<float>(w) / 4.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_box_ = world.CreateBox(floating_box_pos, 0.0f,
-        {0.f, 0.f}, floating_objects_angular_vel_,
-        0.f, 2.5f, 2.5f, floating_objects_restitution_, floating_objects_friction_);
+        {0.f, 0.f}, floating_bodies_angular_vel_,
+        0.f, 2.5f, 2.5f, floating_bodies_restitution_, floating_bodies_friction_);
     
     const Vec2 floating_wide_box_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_wide_box_1_ = world.CreateBox(floating_wide_box_pos, 0.0f,
-        {0.f, 0.f}, floating_objects_angular_vel_,
-        0.f, 3.5f, 0.4f, floating_objects_restitution_, floating_objects_friction_);
+        {0.f, 0.f}, floating_bodies_angular_vel_,
+        0.f, 3.5f, 0.4f, floating_bodies_restitution_, floating_bodies_friction_);
     
     floating_wide_box_2_ = world.CreateBox(floating_wide_box_pos, std::numbers::pi / 2,
-        {0.f, 0.f}, floating_objects_angular_vel_,
-        0.f, 3.5f, 0.4f, floating_objects_restitution_, floating_objects_friction_);
+        {0.f, 0.f}, floating_bodies_angular_vel_,
+        0.f, 3.5f, 0.4f, floating_bodies_restitution_, floating_bodies_friction_);
     
     // Ceil, Floor, Left wall, Right wall.
     const Vec2 ceil_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) } * physics_config::kMpp;
@@ -89,7 +89,7 @@ void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& worl
         }
         
         // Physical logic is only executed if ImGui does not capture input.
-        // Keyboard event.
+        // ===== Keyboard event =====
         if (!io.WantCaptureKeyboard && event.type == SDL_EVENT_KEY_DOWN)
         {
             switch (event.key.key) {
@@ -112,32 +112,21 @@ void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& worl
             }
         }
         
-        // Mouse button event.
+        // ===== Mouse button event =====
         if (!io.WantCaptureMouse && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
         {
+            const Vec2 mouse_pos = Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp;
             if (event.button.button == SDL_BUTTON_LEFT)
             {
-                world.CreateCircle(
-                    Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp,
-                    1.f, {0.f, 0.f}, 0.f, 
-                    circle_spawn_mass_, circle_spawn_radius_, 
-                    circle_spawn_restitution_, circle_spawn_friction_
-                );
+                SpawnBodyAt(world, left_click_spawn_type_, mouse_pos);
             } 
             else if (event.button.button == SDL_BUTTON_RIGHT) 
             {
-                // world.CreateBox(
-                //     Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp,
-                //     0.f, {0.f, 0.f}, 0.0f,
-                //     box_spawn_mass_, box_spawn_half_width_, box_spawn_half_height_,
-                //     box_spawn_restitution_, box_spawn_friction_
-                // );
-                // world.CreateSoftBox(Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp, 2.f, 2.f, 5, 5, 15.f, 0.0000000f);
-                world.CreatePressureSoftCircle(Vec2{ event.button.x, float_h - event.button.y } * physics_config::kMpp, 1.5f, 20, 15.f, 0.0000000f);
+                SpawnBodyAt(world, right_click_spawn_type_, mouse_pos);
             }
         }
         
-        // Mouse motion event.
+        // ===== Mouse motion event =====
         if (!io.WantCaptureMouse && event.type == SDL_EVENT_MOUSE_MOTION)
         {
             if (debug_box_.IsValid())
@@ -150,7 +139,7 @@ void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& worl
             }
         }
         
-        // Mouse wheel event.
+        // ===== Mouse wheel event =====
         if (!io.WantCaptureMouse && event.type == SDL_EVENT_MOUSE_WHEEL)
         {
             if (event.wheel.y > 0.0f) {
@@ -299,12 +288,18 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
 void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
 {
     ImGui::Begin("Physics Engine Control");
+
+    ImGui::Text("FPS: %.1f\nNum Bodies: %d, Num Manifolds: %d",
+        ImGui::GetIO().Framerate, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size());
+    ImGui::Text("Broad-Phase(include rigid-soft narrow-phase): %.5f ms\nNarrow-Phase: %.5f ms\nSolve XPBD Constraint: %.5f ms\nSolve Sequence Impulse Constraint: %.5f ms",
+        world.profile_data_.broad_phase_ms, world.profile_data_.narrow_phase_ms, world.profile_data_.solve_xpbd_constraints_ms, world.profile_data_.solve_si_constraints_ms);
     
-    ImGui::Text("Current FPS: %.1f\nNum Objects: %d, Num Manifolds: %d",
-        ImGui::GetIO().Framerate, world.GetPositions().size(), world.GetManifolds().size());
-    ImGui::Separator();
+    constexpr float indent_len{8.f};
     
-    ImGui::Text("Boundaries:");
+    // ===== Scene Boundaries =====
+    ImGui::Spacing();
+    ImGui::SeparatorText("Boundaries:");
+    ImGui::Indent(indent_len);
     if (ImGui::SliderFloat("Restitution##bound", &boundary_restitution_, 0.0f, 1.0f))
     {
         for (const auto& obj : boundaries_)
@@ -321,68 +316,226 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
             world.SetFriction(*obj, boundary_friction_);
         }
     }
-    ImGui::Separator();
+    ImGui::Unindent(indent_len);
     
-    ImGui::Text("Floating Obstacles:");
-    if (ImGui::SliderFloat("Restitution##floating", &floating_objects_restitution_, 0.0f, 1.0f))
+    // ===== Scene Floating Bodies =====
+    ImGui::Spacing();
+    ImGui::SeparatorText("Floating Bodies:");
+    ImGui::Indent(indent_len);
+    if (ImGui::SliderFloat("Restitution##floating", &floating_bodies_restitution_, 0.0f, 1.0f))
     {
         for (const auto& obj : floatings_)
         {
             if (!obj->IsValid()) continue;
-            world.SetRestitution(*obj, floating_objects_restitution_);
+            world.SetRestitution(*obj, floating_bodies_restitution_);
         }
     }
-    if (ImGui::SliderFloat("Friction##floating", &floating_objects_friction_, 0.0f, 1.0f))
+    if (ImGui::SliderFloat("Friction##floating", &floating_bodies_friction_, 0.0f, 1.0f))
     {
         for (const auto& obj : floatings_)
         {
             if (!obj->IsValid()) continue;
-            world.SetFriction(*obj, floating_objects_friction_);
+            world.SetFriction(*obj, floating_bodies_friction_);
         }
     }
+    ImGui::Spacing();
+    
     if (ImGui::Button("Reset Angular Velocity##floating"))
     {
-        floating_objects_angular_vel_ = 0.f;
+        floating_bodies_angular_vel_ = 0.f;
         for (const auto& obj : floatings_)
         {
             if (!obj->IsValid()) continue;
             world.SetAngularVelocity(*obj, 0.f);
         }
     }
-    if (ImGui::SliderFloat("Angular Velocity##floating", &floating_objects_angular_vel_, -6.0f, 6.0f))
+    if (ImGui::SliderFloat("Angular Velocity##floating", &floating_bodies_angular_vel_, -6.0f, 6.0f))
     {
         for (const auto& obj : floatings_)
         {
             if (!obj->IsValid()) continue;
-            world.SetAngularVelocity(*obj, floating_objects_angular_vel_);
+            world.SetAngularVelocity(*obj, floating_bodies_angular_vel_);
         }
     }
-    ImGui::Separator();
+    ImGui::Unindent(indent_len);
     
-    ImGui::Text("Next Spawned Circle (Left Mouse Button):");
-    ImGui::SliderFloat("Restitution##c", &circle_spawn_restitution_, 0.0f, 1.0f);
-    ImGui::SliderFloat("friction##c", &circle_spawn_friction_, 0.0f, 1.0f);
-    ImGui::SliderFloat("Mass##c", &circle_spawn_mass_, 0.0f, 20.0f);
-    ImGui::SliderFloat("Radius##c", &circle_spawn_radius_, 0.5f, 3.0f);
+    // ===== Mouse Button Spawned Bodies =====
+    ImGui::Spacing();
+    ImGui::SeparatorText("Mouse Spawn Configuration:");
+    ImGui::Indent(indent_len);
+    const char* spawn_type_names[] = {
+        "Rigid Circle",
+        "Rigid Box",
+        "Soft Rope",
+        "Soft Box",
+        "Triangle Area Soft Circle",
+        "Pressure Soft Circle"
+    };
     
-    ImGui::Separator();
+    int left_idx = static_cast<int>(left_click_spawn_type_);
+    if (ImGui::Combo("Left Mouse", &left_idx, spawn_type_names, IM_ARRAYSIZE(spawn_type_names)))
+    {
+        left_click_spawn_type_ = static_cast<SpawnType>(left_idx);
+    }
     
-    ImGui::Text("Next Spawned Box (Right Mouse Button):");
-    ImGui::SliderFloat("Restitution##b", &box_spawn_restitution_, 0.0f, 1.0f);
-    ImGui::SliderFloat("friction##b", &box_spawn_friction_, 0.0f, 1.0f);
-    ImGui::SliderFloat("Mass##b", &box_spawn_mass_, 0.0f, 20.0f);
-    ImGui::SliderFloat("Half-Width##b", &box_spawn_half_width_, 0.1f, 3.0f);
-    ImGui::SliderFloat("Half-Height##b", &box_spawn_half_height_, 0.1f, 3.0f);
-    ImGui::Separator();
+    int right_idx = static_cast<int>(right_click_spawn_type_);
+    if (ImGui::Combo("Right Mouse", &right_idx, spawn_type_names, IM_ARRAYSIZE(spawn_type_names)))
+    {
+        right_click_spawn_type_ = static_cast<SpawnType>(right_idx);
+    }
+    ImGui::Spacing();
     
-    ImGui::Text("Debug Options:");
+    ImGui::Text("Left Mouse:");
+    ImGui::Indent(indent_len);
+    RenderSpawnTypeConfigUi(left_click_spawn_type_);
+    ImGui::Spacing();
+    ImGui::Unindent(indent_len);
+    
+    ImGui::Text("Right Mouse:");
+    // Avoid selecting the same type with left and right mouse buttons.
+    if (left_click_spawn_type_ == right_click_spawn_type_)
+    {
+        ImGui::TextDisabled("(Same as Left Mouse settings)");
+    }
+    else
+    {
+        ImGui::Indent(indent_len);
+        RenderSpawnTypeConfigUi(right_click_spawn_type_);
+        ImGui::Unindent(indent_len);
+    }
+    ImGui::Unindent(indent_len);
+    
+    // ===== Debug Info Render Options =====
+    ImGui::Spacing();
+    ImGui::SeparatorText("Debug Options:");
+    ImGui::Indent(indent_len);
     ImGui::Checkbox("Draw Contact Info", &world.show_debug_contact_points_);
     ImGui::Checkbox("Draw Incident Edge & Reference Edge", &world.show_debug_clipping_);
     ImGui::Text("BVH :");
     ImGui::Checkbox("Draw BVH", &draw_bvh_);
     ImGui::SliderInt("BVH Draw Depth", &bvh_draw_max_depth_, 0, 20);
+    ImGui::Unindent(indent_len);
     
     ImGui::End();
+}
+
+void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const Vec2 spawn_pos) const
+{
+    switch (type)
+    {
+    case SpawnType::RigidCircle:
+        world.CreateCircle(
+            spawn_pos, 0.0f, {0.f, 0.f}, 0.0f,
+            circle_spawn_mass_, circle_spawn_radius_,
+            circle_spawn_restitution_, circle_spawn_friction_
+        );
+        break;
+
+    case SpawnType::RigidBox:
+        world.CreateBox(
+            spawn_pos, 0.0f, {0.f, 0.f}, 0.0f,
+            box_spawn_mass_, box_spawn_half_width_, box_spawn_half_height_,
+            box_spawn_restitution_, box_spawn_friction_
+        );
+        break;
+
+    case SpawnType::SoftRope:
+        {
+            const Vec2 end_pos = is_horizontal_ ? spawn_pos + Vec2{rope_spawn_length_, 0.0f} : spawn_pos - Vec2{0.0f, rope_spawn_length_};
+            world.CreateRope(spawn_pos, end_pos, rope_spawn_num_segments_, rope_spawn_mass_, rope_spawn_compliance_, fix_start_, fix_end_);
+            break;
+        }
+
+    case SpawnType::SoftBox:
+        world.CreateSoftBox(
+            spawn_pos, soft_box_spawn_width_, soft_box_spawn_height_,
+            soft_box_spawn_nx_, soft_box_spawn_ny_,
+            soft_box_spawn_mass_, soft_box_spawn_compliance_
+        );
+        break;
+
+    case SpawnType::SoftCircleArea:
+        world.CreateSoftCircle(
+            spawn_pos, soft_circle_spawn_radius_, soft_circle_spawn_num_segments_,
+            soft_circle_spawn_mass_, soft_circle_spawn_compliance_
+        );
+        break;
+
+    case SpawnType::SoftCirclePressure:
+        world.CreatePressureSoftCircle(
+            spawn_pos, pressure_circle_spawn_radius_, pressure_circle_spawn_num_segments_,
+            pressure_circle_spawn_mass_, pressure_circle_spawn_compliance_
+        );
+        break;
+    }
+}
+
+void Application::RenderSpawnTypeConfigUi(const SpawnType type)
+{
+    switch (type)
+    {
+    case SpawnType::RigidCircle:
+        ImGui::SameLine();
+        ImGui::Text("Rigid Circle");
+        ImGui::SliderFloat("Restitution##c", &circle_spawn_restitution_, 0.0f, 1.0f);
+        ImGui::SliderFloat("Friction##c", &circle_spawn_friction_, 0.0f, 1.0f);
+        ImGui::SliderFloat("Mass##c", &circle_spawn_mass_, 0.1f, 50.0f);
+        ImGui::SliderFloat("Radius##c", &circle_spawn_radius_, 0.1f, 5.0f);
+        break;
+
+    case SpawnType::RigidBox:
+        ImGui::SameLine();
+        ImGui::Text("Rigid Box");
+        ImGui::SliderFloat("Restitution##b", &box_spawn_restitution_, 0.0f, 1.0f);
+        ImGui::SliderFloat("Friction##b", &box_spawn_friction_, 0.0f, 1.0f);
+        ImGui::SliderFloat("Mass##b", &box_spawn_mass_, 0.1f, 50.0f);
+        ImGui::SliderFloat("Half-Width##b", &box_spawn_half_width_, 0.1f, 5.0f);
+        ImGui::SliderFloat("Half-Height##b", &box_spawn_half_height_, 0.1f, 5.0f);
+        break;
+
+    case SpawnType::SoftRope:
+        ImGui::SameLine();
+        ImGui::Text("Soft Rope");
+        ImGui::Checkbox("Fix Start", &fix_start_);
+        ImGui::SameLine();
+        ImGui::Checkbox("Fix End", &fix_end_);
+        ImGui::SameLine();
+        ImGui::Checkbox("Horizontal", &is_horizontal_);
+        ImGui::SliderFloat("Length##rope", &rope_spawn_length_, 1.0f, 30.0f);
+        ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 2, 100);
+        ImGui::SliderFloat("Mass##rope", &rope_spawn_mass_, 0.1f, 100.0f);
+        ImGui::SliderFloat("Compliance##rope", &rope_spawn_compliance_, 0.0f, 0.01f, "%.7f");
+        break;
+
+    case SpawnType::SoftBox:
+        ImGui::SameLine();
+        ImGui::Text("Soft Box");
+        ImGui::SliderFloat("Width##sbox", &soft_box_spawn_width_, 0.5f, 10.0f);
+        ImGui::SliderFloat("Height##sbox", &soft_box_spawn_height_, 0.5f, 10.0f);
+        ImGui::SliderInt("Grid Nx##sbox", &soft_box_spawn_nx_, 2, 20);
+        ImGui::SliderInt("Grid Ny##sbox", &soft_box_spawn_ny_, 2, 20);
+        ImGui::SliderFloat("Mass##sbox", &soft_box_spawn_mass_, 0.1f, 100.0f);
+        ImGui::SliderFloat("Compliance##sbox", &soft_box_spawn_compliance_, 0.0f, 0.01f, "%.7f");
+        break;
+
+    case SpawnType::SoftCircleArea:
+        ImGui::SameLine();
+        ImGui::Text("Triangle Area Soft Circle");
+        ImGui::SliderFloat("Radius##scircle", &soft_circle_spawn_radius_, 0.5f, 10.0f);
+        ImGui::SliderInt("Segments##scircle", &soft_circle_spawn_num_segments_, 3, 60);
+        ImGui::SliderFloat("Mass##scircle", &soft_circle_spawn_mass_, 0.1f, 100.0f);
+        ImGui::SliderFloat("Compliance##scircle", &soft_circle_spawn_compliance_, 0.0f, 0.01f, "%.7f");
+        break;
+
+    case SpawnType::SoftCirclePressure:
+        ImGui::SameLine();
+        ImGui::Text("Pressure Soft Circle");
+        ImGui::SliderFloat("Radius##pcircle", &pressure_circle_spawn_radius_, 0.5f, 10.0f);
+        ImGui::SliderInt("Segments##pcircle", &pressure_circle_spawn_num_segments_, 3, 60);
+        ImGui::SliderFloat("Mass##pcircle", &pressure_circle_spawn_mass_, 0.0f, 100.0f);
+        ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.0f, 0.01f, "%.7f");
+        break;
+    }
 }
 
 ImU32 Application::GetDepthColor(const int depth, const float alpha)
