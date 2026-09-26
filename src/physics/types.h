@@ -215,26 +215,3 @@ struct Item
     size_t id;
     uint32_t morton_code;
 };
-
-class MortonBvh
-{
-public:
-    void Build(PhysicsWorld& world);
-    void Query(PhysicsWorld& world, size_t query_obj_idx);
-    
-private:
-    std::vector<BvhNode> nodes_;
-    std::vector<Aabb> world_aabbs_;
-    size_t root_index_{std::numeric_limits<size_t>::max()};
-    
-    static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, float rot, const Aabb& local_aabb);
-    static uint32_t ExpandBits(uint32_t bits);
-    static uint32_t GetMortonCode(const Vec2& pos, float min_x, float min_y, float max_x, float max_y);
-    size_t BuildRecursive(std::pmr::vector<Item>& items, const std::vector<Aabb>& world_aabbs, size_t start, size_t end);
-    
-    bool CheckRigidParticleCollision(PhysicsWorld& world, size_t query_obj_idx, size_t particle_idx, XpbdContactConstraint& out_constraint);
-    static float SdfCircle(Vec2 p, float r) { return p.Length() - r; }
-    float SdfBox(Vec2 p, Vec2 b) const;
-    Vec2 GetBoxNormal(Vec2 p, Vec2 b);
-    friend PhysicsWorld;
-};

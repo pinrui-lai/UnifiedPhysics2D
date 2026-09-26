@@ -82,7 +82,7 @@ public:
     const std::vector<RotationComponent>& GetRotations() { return rotations_; }
     const std::vector<Shape>& GetShapes() { return shapes_; }
     const std::vector<Vec2>& GetVertices() { return vertices_; }
-    const std::vector<BvhNode>& GetBvhNodes() { return bvh_tree_.nodes_; }
+    const std::vector<BvhNode>& GetBvhNodes() { return bvh_tree_nodes_; }
     const std::vector<Manifold>& GetManifolds() { return manifolds_; }
     const std::vector<Vec2>& GetParticlePositions() { return particle_positions_; }
     const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
@@ -94,7 +94,8 @@ public:
     void SetFriction(const BodyHandle handle, const float friction) { rigid_bodies_[handle.id].friction = friction; }
     
     float gravity_;
-    MortonBvh bvh_tree_;
+    std::vector<BvhNode> bvh_tree_nodes_;
+    size_t bvh_tree_root_index_{std::numeric_limits<size_t>::max()};
     std::vector<Manifold> manifolds_;
     
     bool show_debug_contact_points_ = true;
@@ -107,5 +108,4 @@ public:
     friend CollisionDetectionSystem;
     friend CollisionSolverSystem;
     friend XpbdSolver;
-    friend MortonBvh;
 };

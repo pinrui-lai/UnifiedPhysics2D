@@ -291,7 +291,7 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
 
     ImGui::Text("FPS: %.1f\nNum Bodies: %d, Num Manifolds: %d",
         ImGui::GetIO().Framerate, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size());
-    ImGui::Text("Broad-Phase(include rigid-soft narrow-phase): %.5f ms\nNarrow-Phase: %.5f ms\nSolve XPBD Constraint: %.5f ms\nSolve Sequence Impulse Constraint: %.5f ms",
+    ImGui::Text("Broad-Phase: %.5f ms\nNarrow-Phase: %.5f ms\nSolve XPBD Constraint: %.5f ms\nSolve Sequence Impulse Constraint: %.5f ms",
         world.profile_data_.broad_phase_ms, world.profile_data_.narrow_phase_ms, world.profile_data_.solve_xpbd_constraints_ms, world.profile_data_.solve_si_constraints_ms);
     
     constexpr float indent_len{8.f};
