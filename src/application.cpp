@@ -20,9 +20,11 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     // debug_box_ = world.CreateBox(Vec2{0.f, 0.f} * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f);
 
     // XPBD soft rope.
-    const Vec2 rope_start_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) - 1.5f * physics_config::kPpm} * physics_config::kMpp;
-    const Vec2 rope_end_pos{rope_start_pos.x, rope_start_pos.y - 5.f};
-    SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.000000f);
+    Vec2 rope_start_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f} * physics_config::kMpp;
+    rope_start_pos.x -= 5.f;
+    rope_start_pos.y += 5.f;
+    const Vec2 rope_end_pos{rope_start_pos.x + 10.f, rope_start_pos.y};
+    SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.000000f, true, true);
     
     // Floating obstacle Bodies.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
@@ -34,12 +36,7 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
         {0.f, 0.f}, floating_bodies_angular_vel_,
         0.f, 2.f, floating_bodies_restitution_, floating_bodies_friction_);
     
-    const Vec2 floating_box_pos = Vec2{static_cast<float>(w) / 4.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
-    floating_box_ = world.CreateBox(floating_box_pos, 0.0f,
-        {0.f, 0.f}, floating_bodies_angular_vel_,
-        0.f, 2.5f, 2.5f, floating_bodies_restitution_, floating_bodies_friction_);
-    
-    const Vec2 floating_wide_box_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    const Vec2 floating_wide_box_pos = Vec2{static_cast<float>(w) / 4.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_wide_box_1_ = world.CreateBox(floating_wide_box_pos, 0.0f,
         {0.f, 0.f}, floating_bodies_angular_vel_,
         0.f, 3.5f, 0.4f, floating_bodies_restitution_, floating_bodies_friction_);

@@ -21,106 +21,75 @@ void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
     }
 }
 
-void XpbdSolver::SolveDistanceConstraints(PhysicsWorld& world, const float inv_sdt_sq)
+void XpbdSolver::SolveDistanceConstraint(PhysicsWorld& world, const float inv_sdt_sq, XpbdDistanceConstraint& c)
 {
-    for (auto& c : world.distance_constraints_)
-    {
-        const size_t i1 = c.p1;
-        const size_t i2 = c.p2;
+    const size_t i1 = c.p1;
+    const size_t i2 = c.p2;
+    
+    const float w1 = world.particle_inv_masses_[i1];
+    const float w2 = world.particle_inv_masses_[i2];
+    const float w_sum = w1 + w2;
+    
+    if (w_sum == 0.0f) return;
 
-        const float w1 = world.particle_inv_masses_[i1];
-        const float w2 = world.particle_inv_masses_[i2];
-        const float w_sum = w1 + w2;
+    const Vec2 pos1 = world.particle_positions_[i1];
+    const Vec2 pos2 = world.particle_positions_[i2];
 
-        if (w_sum == 0.0f) continue;
+    const Vec2 delta = pos1 - pos2;
+    const float len = delta.Length();
+    if (len < 1e-6f) return;
 
-        Vec2 pos1 = world.particle_positions_[i1];
-        Vec2 pos2 = world.particle_positions_[i2];
-
-        Vec2 delta = pos1 - pos2;
-        const float len = delta.Length();
-        if (len < 1e-6f) continue;
-
-        Vec2 n = delta / len;
-        const float C = len - c.rest_length; // Constraint function C(x)
-
-        // alpha_tilde = compliance / (sdt^2)
-        const float alpha_tilde = c.compliance * inv_sdt_sq;
-
-        // dLambda
-        const float delta_lambda = (-C - alpha_tilde * c.lambda) / (w_sum + alpha_tilde);
-        c.lambda += delta_lambda;
-
-        // Position correction : dx = w * n * dLambda
-        Vec2 dx = n * delta_lambda;
-        if (w1 > 0.0f) world.particle_positions_[i1] += dx * w1;
-        if (w2 > 0.0f) world.particle_positions_[i2] -= dx * w2;
-    }
+    const Vec2 n = delta / len;
+    const float C = len - c.rest_length; // Constraint function C(x)
+    
+    // alpha_tilde = compliance / (sdt^2)
+    const float alpha_tilde = c.compliance * inv_sdt_sq;
+    
+    // dLambda
+    const float delta_lambda = (-C - alpha_tilde * c.lambda) / (w_sum + alpha_tilde);
+    c.lambda += delta_lambda;
+    
+    // Position correction : dx = w * n * dLambda
+    const Vec2 dx = n * delta_lambda;
+    if (w1 > 0.0f) world.particle_positions_[i1] += dx * w1;
+    if (w2 > 0.0f) world.particle_positions_[i2] -= dx * w2;
 }
 
-void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float inv_sdt_sq)
+void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, float inv_sdt_sq, XpbdTriangleAreaConstraint& c)
 {
-    for (auto& c : world.soft_rigid_contacts_)
-    {
-        const size_t p_idx = c.particle_idx;
-        const float w1 = world.particle_inv_masses_[p_idx];
-        if (w1 == 0.0f) continue;
+    const size_t i1 = c.p1, i2 = c.p2, i3 = c.p3; // Clockwise
+    
+    const float w1 = world.particle_inv_masses_[i1];
+    const float w2 = world.particle_inv_masses_[i2];
+    const float w3 = world.particle_inv_masses_[i3];
+    
+    if (w1 + w2 + w3 == 0.0f) return;
+    
+    const Vec2 p1 = world.particle_positions_[i1];
+    const Vec2 p2 = world.particle_positions_[i2];
+    const Vec2 p3 = world.particle_positions_[i3];
+    
+    // Triangle Area
+    const float current_area = 0.5f * (p1.x * (p3.y - p2.y) + p2.x * (p1.y - p3.y) + p3.x * (p2.y - p1.y));
+    float C = current_area - c.rest_area;
+    
+    // Gradient of C
+    const Vec2 grad1{ 0.5f * (p3.y - p2.y), 0.5f * (p2.x - p3.x) };
+    const Vec2 grad2{ 0.5f * (p1.y - p3.y), 0.5f * (p3.x - p1.x) };
+    const Vec2 grad3{ 0.5f * (p2.y - p1.y), 0.5f * (p1.x - p2.x) };
 
-        Vec2 p = world.particle_positions_[p_idx];
-            
-        // Calculate current penetration depth.
-        float C = (p - c.contact_point).Dot(c.contact_normal);
-        if (C >= 0.0f) continue;
-
-        const float alpha_tilde = c.compliance * inv_sdt_sq;
-        const float delta_lambda = (-C - alpha_tilde * c.lambda) / (w1 + alpha_tilde);
-        c.lambda += delta_lambda;
-
-        // Move particle position to body surface
-        world.particle_positions_[p_idx] += c.contact_normal * (delta_lambda * w1);
-
-        //  [Two-way Coupling] If software needs to push a rigid body, apply an equal and opposite Impulse to the rigid body here.
-    }
-}
-
-void XpbdSolver::SolveTriangleAreaConstraints(PhysicsWorld& world, const float inv_sdt_sq)
-{
-    for (auto& c : world.triangle_area_constraints_)
-    {
-        const size_t i1 = c.p1, i2 = c.p2, i3 = c.p3; // Clockwise
+    const float grad_sq_sum = w1 * grad1.LengthSquared() + w2 * grad2.LengthSquared() + w3 * grad3.LengthSquared();
     
-        const float w1 = world.particle_inv_masses_[i1];
-        const float w2 = world.particle_inv_masses_[i2];
-        const float w3 = world.particle_inv_masses_[i3];
+    if (grad_sq_sum < 1e-9f) return;
     
-        if (w1 + w2 + w3 == 0.0f) continue;
+    // XPBD Position Correction
+    const float alpha_tilde = c.compliance * inv_sdt_sq;
+    const float delta_lambda = (-C - alpha_tilde * c.lambda) / (grad_sq_sum + alpha_tilde);
+    c.lambda += delta_lambda;
     
-        const Vec2 p1 = world.particle_positions_[i1];
-        const Vec2 p2 = world.particle_positions_[i2];
-        const Vec2 p3 = world.particle_positions_[i3];
-    
-        // Triangle Area
-        const float current_area = 0.5f * (p1.x * (p3.y - p2.y) + p2.x * (p1.y - p3.y) + p3.x * (p2.y - p1.y));
-        float C = current_area - c.rest_area;
-    
-        // Gradient of C
-        Vec2 grad1{ 0.5f * (p3.y - p2.y), 0.5f * (p2.x - p3.x) };
-        Vec2 grad2{ 0.5f * (p1.y - p3.y), 0.5f * (p3.x - p1.x) };
-        Vec2 grad3{ 0.5f * (p2.y - p1.y), 0.5f * (p1.x - p2.x) };
-
-        const float grad_sq_sum = w1 * grad1.LengthSquared() + w2 * grad2.LengthSquared() + w3 * grad3.LengthSquared();
-    
-        if (grad_sq_sum < 1e-9f) continue;
-    
-        // XPBD Position Correction
-        const float alpha_tilde = c.compliance * inv_sdt_sq;
-        const float delta_lambda = (-C - alpha_tilde * c.lambda) / (grad_sq_sum + alpha_tilde);
-        c.lambda += delta_lambda;
-    
-        if (w1 > 0.0f) world.particle_positions_[i1] += grad1 * (w1 * delta_lambda);
-        if (w2 > 0.0f) world.particle_positions_[i2] += grad2 * (w2 * delta_lambda);
-        if (w3 > 0.0f) world.particle_positions_[i3] += grad3 * (w3 * delta_lambda);
-    }
+    if (w1 > 0.0f) world.particle_positions_[i1] += grad1 * (w1 * delta_lambda);
+    if (w2 > 0.0f) world.particle_positions_[i2] += grad2 * (w2 * delta_lambda);
+    if (w3 > 0.0f) world.particle_positions_[i3] += grad3 * (w3 * delta_lambda);
 }
 
 void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_sq)
@@ -180,6 +149,69 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
                 world.particle_positions_[curr_idx] += grads[i] * (w * delta_lambda);
             }
         }
+    }
+}
+
+void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float inv_sdt_sq, float sub_dt)
+{
+    for (auto& c : world.soft_rigid_contacts_)
+    {
+        const float w_particle = world.particle_inv_masses_[c.particle_idx];
+        
+        const auto& rigid_body = world.rigid_bodies_[c.body_idx];
+        Vec2 rb = c.contact_point - world.positions_[c.body_idx].val;
+        const float rb_cross_n = rb.Cross(c.contact_normal);
+        const float w_rigid = rigid_body.inv_mass + rigid_body.inv_inertia * (rb_cross_n * rb_cross_n);
+        const float w_sum = w_particle + w_rigid;
+        
+        if (w_sum <= 1e-6f) continue;
+
+        Vec2 particle_pos = world.particle_positions_[c.particle_idx];
+        Vec2 particle_vel = (particle_pos - world.particle_prev_positions_[c.particle_idx]) / sub_dt;
+            
+        // Calculate current penetration depth.
+        float C = (particle_pos - c.contact_point).Dot(c.contact_normal);
+        if (C >= 0.0f) continue;
+
+        const float delta_lambda = -C / w_sum;
+
+        // Move particle
+        world.particle_positions_[c.particle_idx] += c.contact_normal * (delta_lambda * w_particle);
+        
+        // Update rigid velocity (linear + angular)
+        Vec2 impulse_n = c.contact_normal * (delta_lambda / sub_dt);
+        world.velocities_[c.body_idx].val -= impulse_n * rigid_body.inv_mass;
+        world.angular_velocities_[c.body_idx].val -= rigid_body.inv_inertia * rb.Cross(impulse_n);
+        
+        // ===== Tangent Friction =====
+        
+        // Compute relative velocity
+        Vec2 rigid_contact_point_vel = world.velocities_[c.body_idx].val + Vec2::ZCross(world.angular_velocities_[c.body_idx].val, rb);
+        Vec2 rel_vel = particle_vel - rigid_contact_point_vel;
+        Vec2 rel_vel_tangent = rel_vel - c.contact_normal * rel_vel.Dot(c.contact_normal);
+        const float rel_vel_tangent_len = rel_vel_tangent.Length();
+        
+        if (rel_vel_tangent_len <= 1e-6f) continue;
+        
+        Vec2 tangent_dir = rel_vel_tangent / rel_vel_tangent_len;
+
+        const float rb_cross_t = rb.Cross(tangent_dir);
+        const float w_rigid_t =  rigid_body.inv_mass + rigid_body.inv_inertia * (rb_cross_t * rb_cross_t);
+        const float w_sum_t = w_particle + w_rigid_t;
+        
+        float j_t_desired = rel_vel_tangent_len / w_sum_t; // Magnitude of impulse on tangent direction
+        const float j_n_applied = delta_lambda / sub_dt; // Magnitude of impulse on normal direction
+        
+        float max_friction = rigid_body.friction * j_n_applied;
+        const float j_t_final = std::min(j_t_desired, max_friction);
+        
+        // Move particle (convert magnitude of impulse back to position correction)
+        world.particle_positions_[c.particle_idx] -= tangent_dir * (j_t_final * sub_dt) * w_particle;
+        
+        // Update rigid velocity
+        Vec2 impulse_t = tangent_dir * j_t_final;
+        world.velocities_[c.body_idx].val += impulse_t * rigid_body.inv_mass;
+        world.angular_velocities_[c.body_idx].val += rigid_body.inv_inertia * rb.Cross(impulse_t);
     }
 }
 

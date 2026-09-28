@@ -231,7 +231,7 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
 
     // Constraints
     for (size_t i = 0; i < segments; ++i) 
-        {
+    {
         const size_t curr = handle.start_particle_idx + 1 + i;
         const size_t next = handle.start_particle_idx + 1 + ((i + 1) % segments);
 
@@ -296,9 +296,13 @@ void PhysicsWorld::ApplyForceToAll(const Vec2& force)
         rigid_bodies_[i].force += force;
     }
     
-    for (auto& particle_force : particle_forces_)
+    for (const auto& soft_body_handle : soft_body_handles_)
     {
-        particle_force += force;
+        const Vec2 force_per_particle = force / soft_body_handle.particle_count;
+        for (size_t i = 0; i < soft_body_handle.particle_count; ++i)
+        {
+            particle_forces_[soft_body_handle.start_particle_idx + i] += force_per_particle;
+        }
     }
 }
 
@@ -326,9 +330,9 @@ void PhysicsWorld::Step(const float dt)
     const float inv_sdt_sq = 1 / (sub_dt * sub_dt);
     constexpr int velocity_iterations = 3;
     constexpr int position_iterations = 3;
-    constexpr int xpbd_iterations = 3;
+    constexpr int xpbd_iterations = 2;
     
-    for (int sub = 0; sub < sub_steps; ++sub)
+    for (int sub_step = 0; sub_step < sub_steps; ++sub_step)
     {
         
         frame_arena_.release();
@@ -341,12 +345,34 @@ void PhysicsWorld::Step(const float dt)
         CollisionDetectionSystem::CheckCollision(*this);
 
         auto start = Clock::now();
-        for (int i = 0; i < xpbd_iterations; ++i)
+        for (int iter = 0; iter < xpbd_iterations; ++iter)
         {
-            XpbdSolver::SolveDistanceConstraints(*this, inv_sdt_sq);
-            XpbdSolver::SolveTriangleAreaConstraints(*this, inv_sdt_sq);
+            if (iter % 2 == 0) 
+            {
+                for (auto& c : distance_constraints_) 
+                {
+                    XpbdSolver::SolveDistanceConstraint(*this, inv_sdt_sq, c);
+                }
+                for (auto& c : triangle_area_constraints_) 
+                {
+                    XpbdSolver::SolveTriangleAreaConstraint(*this, inv_sdt_sq, c);
+                }
+            } 
+            else 
+            {
+                for (int i = distance_constraints_.size()-1; i >= 0; --i) 
+                {
+                    auto& c = distance_constraints_[i];
+                    XpbdSolver::SolveDistanceConstraint(*this, inv_sdt_sq, c);
+                }
+                for (int i = triangle_area_constraints_.size()-1; i >= 0; --i) 
+                {
+                    auto& c = triangle_area_constraints_[i];
+                    XpbdSolver::SolveTriangleAreaConstraint(*this, inv_sdt_sq, c);
+                }
+            }
             XpbdSolver::SolveGlobalAreaConstraints(*this, inv_sdt_sq);
-            XpbdSolver::SolveCollisionConstraints(*this, inv_sdt_sq);
+            XpbdSolver::SolveCollisionConstraints(*this, inv_sdt_sq, sub_dt);
         }
         profile_data_.solve_xpbd_constraints_ms += Duration(Clock::now() - start).count();
         

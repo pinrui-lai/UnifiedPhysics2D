@@ -104,8 +104,6 @@ struct XpbdContactConstraint
     Vec2 contact_normal;
     Vec2 contact_point;
     float depth;
-    float compliance{0.0f};
-    float lambda{0.0f};
 };
 
 struct XpbdTriangleAreaConstraint
