@@ -30,11 +30,22 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     std::pmr::vector<std::pair<size_t, size_t>> rigid_particle_contacts(&world.frame_arena_);
     rigid_particle_contacts.reserve(100);
     
+    std::pmr::vector<std::pair<size_t, size_t>> soft_soft_contacts(&world.frame_arena_);
+    soft_soft_contacts.reserve(100);
+    
     BuildBvh(world, world_aabbs);
-    const size_t count = world.positions_.size();
-    for (size_t i = 0; i < count; ++i)
+    
+    // Query rigid bodies for rigid-rigid and rigid-soft contact.
+    for (size_t i = 0; i < rigid_count; ++i)
     {
-        QueryBvh(world, world_aabbs, i, rigid_particle_contacts);
+        QueryBvh(world, world_aabbs, i, rigid_particle_contacts, soft_soft_contacts);
+    }
+    
+    // Query soft bodies for soft-soft contact.
+    for (size_t i = 0; i < soft_count; ++i)
+    {
+        const size_t idx = rigid_count + i;
+        QueryBvh(world, world_aabbs, idx, rigid_particle_contacts, soft_soft_contacts);
     }
     
     // Remove manifold whose AABBs no longer overlap.
@@ -51,6 +62,12 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     for (const auto& [fst, snd] : rigid_particle_contacts)
     {
         CheckRigidParticleCollision(world, fst, snd);
+    }
+    
+    // Soft vs Soft.
+    for (const auto& [fst, snd] : soft_soft_contacts)
+    {
+        CheckSoftSoftCollision(world, fst, snd);
     }
     
     // Rigid vs Rigid (GJK + EPA + Clipping).
@@ -628,12 +645,11 @@ void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aa
 }
 
 void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, size_t query_obj_idx,
-    std::pmr::vector<std::pair<size_t, size_t>>& rigid_soft_contacts)
+    std::pmr::vector<std::pair<size_t, size_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<size_t, size_t>>& soft_soft_contacts)
 {
     if (world.bvh_tree_root_index_ == std::numeric_limits<size_t>::max()) return;
     
     const size_t rigid_count = world.positions_.size();
-    if (query_obj_idx >= rigid_count) return; // No Soft to Soft query
     
     std::pmr::vector<size_t> stack(&world.frame_arena_);
     stack.reserve(64);
@@ -643,15 +659,14 @@ void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vec
         const size_t curr = stack.back();
         stack.pop_back();
 
-        const BvhNode& node = world.bvh_tree_nodes_[curr];
-        if (Aabb::Overlap(node.aabb, world_aabbs[query_obj_idx])) 
+        if (const BvhNode& node = world.bvh_tree_nodes_[curr]; Aabb::Overlap(node.aabb, world_aabbs[query_obj_idx])) 
         {
             if (node.IsLeaf()) 
             {
                 // Rigid vs Rigid
                 if (const size_t leaf_id = node.leaf_id; leaf_id < rigid_count)
                 {
-                    if (node.leaf_id == query_obj_idx) continue;
+                    if (node.leaf_id == query_obj_idx || query_obj_idx >= rigid_count) continue;
                 
                     auto it = std::ranges::find_if(world.manifolds_, [&](const Manifold& manifold)
                     {
@@ -668,14 +683,27 @@ void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vec
                         world.manifolds_.emplace_back(query_obj_idx, node.leaf_id);
                     }
                 }
-                // Rigid bs Soft
                 else
                 {
                     const size_t soft_idx = leaf_id - rigid_count;
-                    for (size_t i = 0; i < world.soft_body_handles_[soft_idx].particle_count; ++i)
+                    
+                    // Rigid vs Soft (Particle)
+                    if (query_obj_idx < rigid_count)
                     {
-                        const size_t particle_idx = world.soft_body_handles_[soft_idx].start_particle_idx + i;
-                        rigid_soft_contacts.emplace_back(query_obj_idx, particle_idx);
+                        const auto& soft_handle = world.soft_body_handles_[soft_idx];
+                        for (size_t i = soft_handle.start_surface_particle_idx; i < soft_handle.start_surface_particle_idx + soft_handle.surface_particle_count; ++i)
+                        {
+                            const auto particle_idx = world.surface_particles_idx_[i]; // Only detect surface particle of soft body
+                            rigid_soft_contacts.emplace_back(query_obj_idx, particle_idx);
+                        }
+                    }
+                    // Soft vs Soft
+                    else
+                    {
+                        const size_t query_soft_idx = query_obj_idx - rigid_count;
+                        if (query_soft_idx == soft_idx) continue;
+                        
+                        soft_soft_contacts.emplace_back(query_soft_idx, soft_idx);
                     }
                 }
             } 
@@ -719,10 +747,10 @@ size_t CollisionDetectionSystem::BuildBvhRecursive(PhysicsWorld& world, std::pmr
     return node_index;
 }
 
-bool CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, const size_t query_obj_idx, const size_t particle_idx)
+void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, const size_t query_obj_idx, const size_t particle_idx)
 {
     Shape& shape = world.shapes_[query_obj_idx];
-    return std::visit(Overload{
+    std::visit(Overload{
         [&](const BoxShape& b)
         {
             const float s = std::sin(world.rotations_[query_obj_idx].val);
@@ -731,7 +759,7 @@ bool CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, 
             Vec2 p_pos_map_to_box = world.particle_positions_[particle_idx] - world.positions_[query_obj_idx].val;
             p_pos_map_to_box = {p_pos_map_to_box.x * c + p_pos_map_to_box.y * s , - p_pos_map_to_box.x * s + p_pos_map_to_box.y * c};
             const float depth = SdfBox(p_pos_map_to_box, {b.half_width, b.half_height});
-            if (depth >= 0.f) return false;
+            if (depth >= 0.f) return;
             
             const Vec2 local_normal = GetParticleBoxCollisionNormal(p_pos_map_to_box, {b.half_width, b.half_height});
             
@@ -739,22 +767,62 @@ bool CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, 
             Vec2 contact_point = world.particle_positions_[particle_idx] + contact_normal * -depth;
    
             world.soft_rigid_contacts_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
-            return true;
         },
         [&](const CircleShape& c)
         {
             const Vec2 p_pos_map_to_circle = world.particle_positions_[particle_idx] - world.positions_[query_obj_idx].val;
             const float depth = SdfCircle(p_pos_map_to_circle, c.radius);
-            if (depth >= 0.f) return false;
+            if (depth >= 0.f) return;
             
             Vec2 contact_normal = p_pos_map_to_circle.Normalized() ;
             Vec2 contact_point = world.particle_positions_[particle_idx] + contact_normal * -depth;
         
             world.soft_rigid_contacts_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
-            return true;
         },
-        [&](const PolygonShape& p){ return false; },
+        [&](const PolygonShape& p){},
     }, shape);
+}
+
+void CollisionDetectionSystem::CheckParticleEdgeCollision(PhysicsWorld& world, const float total_thickness, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b)
+{
+    for (size_t i = soft_body_a.start_surface_particle_idx; i < soft_body_a.start_surface_particle_idx + soft_body_a.surface_particle_count; ++i) 
+    {
+        const auto particle_idx = world.surface_particles_idx_[i]; // Only detect surface particles.
+        const Vec2& particle_pos = world.particle_positions_[particle_idx];
+        
+        for (size_t j = 0; j < soft_body_b.edge_count; ++j)
+        {
+            const auto edge_idx = soft_body_b.start_edge_idx + j;
+            const auto& edge = world.surface_edges_[edge_idx];
+            
+            const Vec2& a = world.particle_positions_[edge.first];
+            const Vec2& b = world.particle_positions_[edge.second];
+
+            Vec2 ab = b - a;
+            const float ab_len_sq = ab.LengthSquared();
+            if (ab_len_sq < 1e-6f) continue;
+
+            // Calculate the projection ratio t of P onto line AB.
+            float t = (particle_pos - a).Dot(ab) / ab_len_sq;
+            if (t < 0.f || t > 1.f) continue;
+            
+            Vec2 proj = a + ab * t;
+            Vec2 diff = particle_pos - proj;
+
+            // The distance is less than the thickness of the two particles.
+            if (const float dist = diff.Length(); dist < total_thickness) 
+            {
+                const Vec2 normal = (dist > 1e-6f) ? diff / dist : Vec2{0.0f, 1.0f};
+                world.particle_edge_collision_constraints_.emplace_back(normal, particle_idx, edge.first, edge.second, -(dist - total_thickness), t);
+            }
+        }
+    }
+}
+
+void CollisionDetectionSystem::CheckSoftSoftCollision(PhysicsWorld& world, const size_t soft_idx1, const size_t soft_idx2)
+{
+    CheckParticleEdgeCollision(world, physics_config::kTwoParticlesThickness, world.soft_body_handles_[soft_idx1], world.soft_body_handles_[soft_idx2]);
+    CheckParticleEdgeCollision(world, physics_config::kTwoParticlesThickness, world.soft_body_handles_[soft_idx2], world.soft_body_handles_[soft_idx1]);
 }
 
 float CollisionDetectionSystem::SdfBox(const Vec2 p, const Vec2 b)

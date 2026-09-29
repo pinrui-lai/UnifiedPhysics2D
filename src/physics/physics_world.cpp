@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <unordered_set>
 
 #include "physics_world.h"
 #include "movement_system.h"
@@ -60,7 +61,7 @@ BodyHandle PhysicsWorld::CreatePolygon(const Vec2& pos, const float rotation, co
     return CreateBody(pos, rotation, velocity, angular_velocity, mass, 1, restitution, friction);
 }
 
-size_t PhysicsWorld::AddParticle(PhysicsWorld& world, const Vec2& pos, const float inv_mass)
+size_t PhysicsWorld::AddParticle(PhysicsWorld& world, const Vec2& pos, const float inv_mass, const float friction)
 {
     const size_t idx = world.particle_positions_.size();
     world.particle_positions_.push_back(pos);
@@ -68,6 +69,7 @@ size_t PhysicsWorld::AddParticle(PhysicsWorld& world, const Vec2& pos, const flo
     world.particle_velocities_.push_back(Vec2{0.0f, 0.0f});
     world.particle_inv_masses_.push_back(inv_mass);
     world.particle_forces_.push_back(Vec2{0.0f, 0.0f});
+    world.particle_frictions_.push_back(friction);
     return idx;
 }
 
@@ -112,13 +114,17 @@ size_t PhysicsWorld::AddGlobalAreaConstraint(PhysicsWorld& world, size_t start_p
 }
 
 SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, const size_t segments, const float mass,
-                                        const float compliance, const bool fix_start, const bool fix_end)
+    const float friction, const float compliance, const bool fix_start, const bool fix_end)
 {
     if (segments == 0) return {};
 
     SoftBodyHandle handle;
     handle.start_particle_idx = particle_positions_.size();
     handle.particle_count = segments + 1;
+    handle.start_edge_idx = surface_edges_.size();
+    handle.edge_count = segments;
+    handle.start_surface_particle_idx = surface_particles_idx_.size();
+    handle.surface_particle_count = segments + 1;
 
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
     const float inv_particle_mass = particle_mass > 0.0f ? 1.0f / particle_mass : 0.0f;
@@ -133,7 +139,9 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
         {
             current_inv_particle_mass = 0.0f; // Mass of fixed particle is infinity
         }
-        AddParticle(*this, pos, current_inv_particle_mass);
+        AddParticle(*this, pos, current_inv_particle_mass, friction);
+        
+        surface_particles_idx_.push_back(handle.start_particle_idx + i);
     }
 
     // Create distance constraints
@@ -142,20 +150,25 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
         const size_t p1 = handle.start_particle_idx + i;
         const size_t p2 = handle.start_particle_idx + i + 1;
         AddDistanceConstraint(*this, p1, p2, compliance);
+        surface_edges_.emplace_back(p1, p2);
     }
 
     soft_body_handles_.push_back(handle);
     return handle;
 }
 
-SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, float width, float height, size_t res_x, size_t res_y,
-    const float mass, const float compliance)
+SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, const float height, const size_t res_x, const size_t res_y,
+    const float mass, const float friction, const float compliance)
 {
     if (res_x < 2 || res_y < 2) return {};
 
     SoftBodyHandle handle;
     handle.start_particle_idx = particle_positions_.size();
     handle.particle_count = res_x * res_y;
+    handle.start_edge_idx = surface_edges_.size();
+    handle.edge_count = (res_x - 1) * 2 + (res_y - 1) * 2;
+    handle.start_surface_particle_idx = surface_particles_idx_.size();
+    handle.surface_particle_count = res_x * 2 + res_y * 2 - 4;
 
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
     const float inv_mass = particle_mass > 0.0f ? 1.0f / particle_mass : 0.0f;
@@ -170,12 +183,15 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, float width, float h
         for (size_t x = 0; x < res_x; ++x) 
         {
             Vec2 p_pos = min_pos + Vec2{step.x * static_cast<float>(x), step.y * static_cast<float>(y)};
-            AddParticle(*this, p_pos, inv_mass);
+            AddParticle(*this, p_pos, inv_mass, friction);
         }
     }
 
     auto get_idx = [&](const size_t x, const size_t y) { return handle.start_particle_idx + y * res_x + x; };
 
+    std::pmr::unordered_set<size_t> seen(&frame_arena_);
+    seen.reserve(handle.surface_particle_count);
+    
     // Constraints
     for (size_t y = 0; y < res_y - 1; ++y) 
     {
@@ -187,17 +203,60 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, float width, float h
             const size_t p11 = get_idx(x + 1, y + 1);
 
             // Structural Springs
-            if (y == 0) AddDistanceConstraint(*this, p00, p10, compliance);
-            if (x == 0) AddDistanceConstraint(*this, p00, p01, compliance);
+            if (y == 0)
+            {
+                AddDistanceConstraint(*this, p00, p10, compliance);
+                surface_edges_.emplace_back(p00, p10);
+                
+                // Surface points
+                if (seen.insert(p00).second) {
+                    surface_particles_idx_.push_back(p00);
+                }
+                if (seen.insert(p10).second) {
+                    surface_particles_idx_.push_back(p10);
+                }
+            }
+            if (x == 0)
+            {
+                AddDistanceConstraint(*this, p00, p01, compliance);
+                surface_edges_.emplace_back(p00, p01);
+                if (seen.insert(p00).second) {
+                    surface_particles_idx_.push_back(p00);
+                }
+                if (seen.insert(p01).second) {
+                    surface_particles_idx_.push_back(p01);
+                }
+            } 
+                
             AddDistanceConstraint(*this, p10, p11, compliance);
             AddDistanceConstraint(*this, p01, p11, compliance);
+            
+            if (y == res_y - 2)
+            {
+                surface_edges_.emplace_back(p01, p11);
+                if (seen.insert(p01).second) {
+                    surface_particles_idx_.push_back(p01);
+                }
+                if (seen.insert(p11).second) {
+                    surface_particles_idx_.push_back(p11);
+                }
+            }
+            if (x == res_x - 2)
+            {
+                surface_edges_.emplace_back(p10, p11);
+                if (seen.insert(p10).second) {
+                    surface_particles_idx_.push_back(p10);
+                }
+                if (seen.insert(p11).second) {
+                    surface_particles_idx_.push_back(p11);
+                }
+            }
 
             // Triangle Area Constraints
             // Each Quad is split into two triangles: (p00, p11, p10) and (p00, p01, p11).
             // compliance Setting it to 0 ensures that the volume does not degrade.
             AddTriangleAreaConstraint(*this, p00, p11, p10, 0.0f); 
             AddTriangleAreaConstraint(*this,p00, p01, p11, 0.0f);
-            
         }
     }
     
@@ -206,19 +265,23 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, float width, float h
 }
 
 SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radius, const size_t segments, const float mass,
-    const float compliance)
+    const float friction, const float compliance)
 {
     if (segments < 3) return {};
 
     SoftBodyHandle handle;
     handle.start_particle_idx = particle_positions_.size();
     handle.particle_count = segments + 1; // 1 Center + N Outer Ring Particles
+    handle.start_edge_idx = surface_edges_.size();
+    handle.edge_count = segments;
+    handle.start_surface_particle_idx = surface_particles_idx_.size();
+    handle.surface_particle_count = segments;
 
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
     const float inv_mass = particle_mass > 0.0f ? 1.0f / particle_mass : 0.0f;
 
     // Center Particle
-    const size_t center_idx = AddParticle(*this, pos, inv_mass);
+    const size_t center_idx = AddParticle(*this, pos, inv_mass, friction);
 
     // Clockwise Outer Ring Particles
     static constexpr float two_pi = 6.28318530718f;
@@ -226,7 +289,7 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
     {
         const float angle = -(static_cast<float>(i) * two_pi) / static_cast<float>(segments);
         Vec2 p_pos = pos + Vec2{std::cos(angle) * radius, std::sin(angle) * radius};
-        AddParticle(*this, p_pos, inv_mass);
+        AddParticle(*this, p_pos, inv_mass, friction);
     }
 
     // Constraints
@@ -234,10 +297,12 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
     {
         const size_t curr = handle.start_particle_idx + 1 + i;
         const size_t next = handle.start_particle_idx + 1 + ((i + 1) % segments);
+        surface_particles_idx_.push_back(curr);
 
         // Outer Ring Distance  Constraint
         AddDistanceConstraint(*this, curr, next, compliance);
-
+        surface_edges_.emplace_back(curr, next);
+        
         // Internal Circular Sector Area Constraint (Clockwise)
         AddTriangleAreaConstraint(*this, center_idx, curr, next, 0.0f);
     }
@@ -247,14 +312,18 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
 }
 
 SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const float radius, const size_t segments, const float mass,
-    const float compliance)
+    const float friction, const float compliance)
 {
     if (segments < 3) return {};
 
     SoftBodyHandle handle;
     handle.start_particle_idx = particle_positions_.size();
     handle.particle_count = segments; // Outer Ring Particles
-
+    handle.start_edge_idx = surface_edges_.size();
+    handle.edge_count = segments;
+    handle.start_surface_particle_idx = surface_particles_idx_.size();
+    handle.surface_particle_count = segments;
+    
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
     const float inv_mass = particle_mass > 0.0f ? 1.0f / particle_mass : 0.0f;
     
@@ -264,14 +333,16 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
     {
         const float angle = -(static_cast<float>(i) * two_pi) / static_cast<float>(segments);
         Vec2 p_pos = pos + Vec2{std::cos(angle) * radius, std::sin(angle) * radius};
-        AddParticle(*this, p_pos, inv_mass);
+        AddParticle(*this, p_pos, inv_mass, friction);
     }
-
+    
     // Constraints
     for (size_t i = 0; i < segments; ++i) 
     {
         const size_t curr = handle.start_particle_idx + i;
         const size_t next = handle.start_particle_idx + ((i + 1) % segments);
+        surface_edges_.emplace_back(curr, next);
+        surface_particles_idx_.push_back(curr);
 
         // Outer Ring Distance Constraint
         AddDistanceConstraint(*this, curr, next, compliance);
@@ -334,9 +405,10 @@ void PhysicsWorld::Step(const float dt)
     
     for (int sub_step = 0; sub_step < sub_steps; ++sub_step)
     {
-        
         frame_arena_.release();
         soft_rigid_contacts_.clear();
+        particle_edge_collision_constraints_.clear();
+        
         ApplyGravity();
         
         MovementSystem::IntegrateVelocity(*this, sub_dt);
@@ -372,7 +444,8 @@ void PhysicsWorld::Step(const float dt)
                 }
             }
             XpbdSolver::SolveGlobalAreaConstraints(*this, inv_sdt_sq);
-            XpbdSolver::SolveCollisionConstraints(*this, inv_sdt_sq, sub_dt);
+            XpbdSolver::SolveCollisionConstraints(*this, sub_dt);
+            XpbdSolver::SolveParticleEdgeCollisionConstraints(*this);
         }
         profile_data_.solve_xpbd_constraints_ms += Duration(Clock::now() - start).count();
         

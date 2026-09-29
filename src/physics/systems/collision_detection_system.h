@@ -28,12 +28,15 @@ private:
     static Vec2 TripleProduct(const Vec2& a, const Vec2& b, const Vec2& c) {return b * a.Dot(c) - a * b.Dot(c); }
     
     static void BuildBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_aabbs);
-    static void QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, size_t query_obj_idx, std::pmr::vector<std::pair<size_t, size_t>>& rigid_soft_contacts);
+    static void QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, size_t query_obj_idx, std::pmr::vector<std::pair<size_t, size_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<size_t, size_t>>& soft_soft_contacts);
     static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, float rot, const Aabb& local_aabb);
     static uint32_t ExpandBits(uint32_t bits);
     static uint32_t GetMortonCode(const Vec2& pos, float min_x, float min_y, float max_x, float max_y);
     static size_t BuildBvhRecursive(PhysicsWorld& world, std::pmr::vector<Item>& items, const std::pmr::vector<Aabb>& world_aabbs, size_t start, size_t end);
-    static bool CheckRigidParticleCollision(PhysicsWorld& world, size_t query_obj_idx, size_t particle_idx);
+    static void CheckRigidParticleCollision(PhysicsWorld& world, size_t query_obj_idx, size_t particle_idx);
+    static void CheckParticleEdgeCollision(PhysicsWorld& world, float total_thickness, const SoftBodyHandle& soft_body_a,
+                                           const SoftBodyHandle& soft_body_b);
+    static void CheckSoftSoftCollision(PhysicsWorld& world, size_t soft_idx1, size_t soft_idx2);
     static float SdfCircle(const Vec2 p, const float r) { return p.Length() - r; }
     static float SdfBox(Vec2 p, Vec2 b);
     static Vec2 GetParticleBoxCollisionNormal(Vec2 p, Vec2 b);

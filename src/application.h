@@ -78,6 +78,7 @@ private:
     float rope_spawn_length_{5.f};
     int rope_spawn_num_segments_{20};
     float rope_spawn_mass_{5.f};
+    float rope_spawn_friction_{0.5f};
     float rope_spawn_compliance_{0.0000000f};
 
     // Soft Box (Triangle Area)
@@ -86,18 +87,21 @@ private:
     int soft_box_spawn_nx_{5};
     int soft_box_spawn_ny_{5};
     float soft_box_spawn_mass_{5.f};
+    float soft_box_spawn_friction_{0.5f};
     float soft_box_spawn_compliance_{0.0000000f};
 
     // Soft Circle (Triangle Area)
     float soft_circle_spawn_radius_{1.5f};
     int soft_circle_spawn_num_segments_{20};
     float soft_circle_spawn_mass_{10.f};
+    float soft_circle_spawn_friction_{0.5f};
     float soft_circle_spawn_compliance_{0.0000000f};
 
     // Soft Circle (Pressure)
     float pressure_circle_spawn_radius_{1.5f};
     int pressure_circle_spawn_num_segments_{20};
     float pressure_circle_spawn_mass_{10.f};
+    float pressure_circle_spawn_friction_{0.5f};
     float pressure_circle_spawn_compliance_{0.0000000f};
     
     // ===== Others =====

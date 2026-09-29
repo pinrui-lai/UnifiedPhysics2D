@@ -1,4 +1,3 @@
-#include <iostream>
 #include <array>
 #include <numbers>
 #include <SDL3/SDL.h>
@@ -24,7 +23,7 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     rope_start_pos.x -= 5.f;
     rope_start_pos.y += 5.f;
     const Vec2 rope_end_pos{rope_start_pos.x + 10.f, rope_start_pos.y};
-    SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.000000f, true, true);
+    SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.5f, 0.000000f, true, true);
     
     // Floating obstacle Bodies.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
@@ -135,16 +134,6 @@ void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& worl
                 world.SetPosition({debug_circle_}, Vec2{(event.motion.x), float_h - event.motion.y} * physics_config::kMpp);    
             }
         }
-        
-        // ===== Mouse wheel event =====
-        if (!io.WantCaptureMouse && event.type == SDL_EVENT_MOUSE_WHEEL)
-        {
-            if (event.wheel.y > 0.0f) {
-                std::cout << "Scroll up. ";
-            } else if (event.wheel.y < 0.0f) {
-                std::cout << "Scroll down. ";
-            }
-        }
     }
 }
 
@@ -233,6 +222,12 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         ImVec2 p0(particle_positions[constraint.p1].x * physics_config::kPpm, float_h - particle_positions[constraint.p1].y * physics_config::kPpm);
         ImVec2 p1(particle_positions[constraint.p2].x * physics_config::kPpm, float_h - particle_positions[constraint.p2].y * physics_config::kPpm);
         draw_list->AddLine(p0, p1, IM_COL32(255, 0, 0, 255), 2.0f);
+    }
+    
+    for (const auto& idx : world.GetSurfaceParticlesIdx())
+    {
+        ImVec2 pos{particle_positions[idx].x * physics_config::kPpm, float_h - particle_positions[idx].y * physics_config::kPpm};
+        draw_list->AddCircleFilled(pos, 5.0f, IM_COL32(255, 127, 0, 255));
     }
     
     // ==== Debug Option ====
@@ -439,7 +434,7 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
     case SpawnType::SoftRope:
         {
             const Vec2 end_pos = is_horizontal_ ? spawn_pos + Vec2{rope_spawn_length_, 0.0f} : spawn_pos - Vec2{0.0f, rope_spawn_length_};
-            world.CreateRope(spawn_pos, end_pos, rope_spawn_num_segments_, rope_spawn_mass_, rope_spawn_compliance_, fix_start_, fix_end_);
+            world.CreateRope(spawn_pos, end_pos, rope_spawn_num_segments_, rope_spawn_mass_, rope_spawn_friction_, rope_spawn_compliance_, fix_start_, fix_end_);
             break;
         }
 
@@ -447,21 +442,21 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
         world.CreateSoftBox(
             spawn_pos, soft_box_spawn_width_, soft_box_spawn_height_,
             soft_box_spawn_nx_, soft_box_spawn_ny_,
-            soft_box_spawn_mass_, soft_box_spawn_compliance_
+            soft_box_spawn_mass_, soft_box_spawn_friction_, soft_box_spawn_compliance_
         );
         break;
 
     case SpawnType::SoftCircleArea:
         world.CreateSoftCircle(
             spawn_pos, soft_circle_spawn_radius_, soft_circle_spawn_num_segments_,
-            soft_circle_spawn_mass_, soft_circle_spawn_compliance_
+            soft_circle_spawn_mass_, soft_circle_spawn_friction_, soft_circle_spawn_compliance_
         );
         break;
 
     case SpawnType::SoftCirclePressure:
         world.CreatePressureSoftCircle(
             spawn_pos, pressure_circle_spawn_radius_, pressure_circle_spawn_num_segments_,
-            pressure_circle_spawn_mass_, pressure_circle_spawn_compliance_
+            pressure_circle_spawn_mass_, pressure_circle_spawn_friction_, pressure_circle_spawn_compliance_
         );
         break;
     }
@@ -501,6 +496,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderFloat("Length##rope", &rope_spawn_length_, 1.0f, 30.0f);
         ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 2, 100);
         ImGui::SliderFloat("Mass##rope", &rope_spawn_mass_, 0.1f, 100.0f);
+        ImGui::SliderFloat("Friction##rope", &rope_spawn_friction_, 0.0f, 1.0f);
         ImGui::SliderFloat("Compliance##rope", &rope_spawn_compliance_, 0.0f, 0.01f, "%.7f");
         break;
 
@@ -512,6 +508,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderInt("Grid Nx##sbox", &soft_box_spawn_nx_, 2, 20);
         ImGui::SliderInt("Grid Ny##sbox", &soft_box_spawn_ny_, 2, 20);
         ImGui::SliderFloat("Mass##sbox", &soft_box_spawn_mass_, 0.1f, 100.0f);
+        ImGui::SliderFloat("Friction##sbox", &soft_box_spawn_friction_, 0.0f, 1.0f);
         ImGui::SliderFloat("Compliance##sbox", &soft_box_spawn_compliance_, 0.0f, 0.01f, "%.7f");
         break;
 
@@ -521,6 +518,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderFloat("Radius##scircle", &soft_circle_spawn_radius_, 0.5f, 10.0f);
         ImGui::SliderInt("Segments##scircle", &soft_circle_spawn_num_segments_, 3, 60);
         ImGui::SliderFloat("Mass##scircle", &soft_circle_spawn_mass_, 0.1f, 100.0f);
+        ImGui::SliderFloat("Friction##scircle", &soft_circle_spawn_friction_, 0.0f, 1.0f);
         ImGui::SliderFloat("Compliance##scircle", &soft_circle_spawn_compliance_, 0.0f, 0.01f, "%.7f");
         break;
 
@@ -530,6 +528,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderFloat("Radius##pcircle", &pressure_circle_spawn_radius_, 0.5f, 10.0f);
         ImGui::SliderInt("Segments##pcircle", &pressure_circle_spawn_num_segments_, 3, 60);
         ImGui::SliderFloat("Mass##pcircle", &pressure_circle_spawn_mass_, 0.0f, 100.0f);
+        ImGui::SliderFloat("Friction##pcircle", &pressure_circle_spawn_friction_, 0.0f, 1.0f);
         ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.0f, 0.01f, "%.7f");
         break;
     }

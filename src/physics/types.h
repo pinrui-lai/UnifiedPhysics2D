@@ -124,6 +124,15 @@ struct XpbdGlobalAreaConstraint
     float lambda{0.0f};
 };
 
+struct XpbdParticleEdgeCollisionConstraint {
+    Vec2 normal;
+    size_t body_a_particle_idx;
+    size_t body_b_p1_idx;
+    size_t body_b_p2_idx;
+    float penetration;
+    float t; // The ratio of the projected points on the line segment is [0, 1].
+};
+
 struct BodyHandle
 {
     size_t id;
@@ -134,6 +143,10 @@ struct SoftBodyHandle
 {
     size_t start_particle_idx{0};
     size_t particle_count{0};
+    size_t start_edge_idx{0};
+    size_t edge_count{0};
+    size_t start_surface_particle_idx{0};
+    size_t surface_particle_count{0};
     
     bool IsValid() const { return particle_count > 0; }
 };

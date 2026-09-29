@@ -152,7 +152,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
     }
 }
 
-void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float inv_sdt_sq, float sub_dt)
+void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float sub_dt)
 {
     for (auto& c : world.soft_rigid_contacts_)
     {
@@ -165,12 +165,9 @@ void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float inv_
         const float w_sum = w_particle + w_rigid;
         
         if (w_sum <= 1e-6f) continue;
-
-        Vec2 particle_pos = world.particle_positions_[c.particle_idx];
-        Vec2 particle_vel = (particle_pos - world.particle_prev_positions_[c.particle_idx]) / sub_dt;
             
         // Calculate current penetration depth.
-        float C = (particle_pos - c.contact_point).Dot(c.contact_normal);
+        float C = (world.particle_positions_[c.particle_idx] - c.contact_point).Dot(c.contact_normal);
         if (C >= 0.0f) continue;
 
         const float delta_lambda = -C / w_sum;
@@ -186,6 +183,7 @@ void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float inv_
         // ===== Tangent Friction =====
         
         // Compute relative velocity
+        Vec2 particle_vel = (world.particle_positions_[c.particle_idx] - world.particle_prev_positions_[c.particle_idx]) / sub_dt;
         Vec2 rigid_contact_point_vel = world.velocities_[c.body_idx].val + Vec2::ZCross(world.angular_velocities_[c.body_idx].val, rb);
         Vec2 rel_vel = particle_vel - rigid_contact_point_vel;
         Vec2 rel_vel_tangent = rel_vel - c.contact_normal * rel_vel.Dot(c.contact_normal);
@@ -212,6 +210,59 @@ void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float inv_
         Vec2 impulse_t = tangent_dir * j_t_final;
         world.velocities_[c.body_idx].val += impulse_t * rigid_body.inv_mass;
         world.angular_velocities_[c.body_idx].val += rigid_body.inv_inertia * rb.Cross(impulse_t);
+    }
+}
+
+void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
+{
+    for (const auto& c : world.particle_edge_collision_constraints_) {
+        // Compute current penetration.
+        Vec2 ab = world.particle_positions_[c.body_b_p2_idx] - world.particle_positions_[c.body_b_p1_idx];
+        Vec2 proj = world.particle_positions_[c.body_b_p1_idx] + ab * c.t;
+        Vec2 diff = world.particle_positions_[c.body_a_particle_idx] - proj;
+            
+        float C = diff.Dot(c.normal) - physics_config::kTwoParticlesThickness;
+        if (C >= 0.0f) continue;
+
+        const float w_p = world.particle_inv_masses_[c.body_a_particle_idx];
+        const float w_a = (1.0f - c.t) * world.particle_inv_masses_[c.body_b_p1_idx];
+        const float w_b = c.t * world.particle_inv_masses_[c.body_b_p2_idx];
+
+        // grad_p = n, grad_a = -(1-t)n, grad_b = -t*n
+        const float w_sum = w_p + (1.0f - c.t) * w_a + c.t * w_b;
+        if (w_sum < 1e-6f) continue;
+
+        const float delta_lambda = -C / w_sum ;
+
+        // Move particles
+        world.particle_positions_[c.body_a_particle_idx] += c.normal * (w_p * delta_lambda);
+        world.particle_positions_[c.body_b_p1_idx] -= c.normal * (w_a * delta_lambda);
+        world.particle_positions_[c.body_b_p2_idx] -= c.normal * (w_b * delta_lambda);
+        
+        // ===== tangent friction =====
+        
+        // Compute relative delta x.
+        Vec2 particle_dx = world.particle_positions_[c.body_a_particle_idx] - world.particle_prev_positions_[c.body_a_particle_idx];
+        Vec2 edge_p1_dx = world.particle_positions_[c.body_b_p1_idx] - world.particle_prev_positions_[c.body_b_p1_idx];
+        Vec2 edge_p2_dx = world.particle_positions_[c.body_b_p2_idx] - world.particle_prev_positions_[c.body_b_p2_idx];
+        Vec2 proj_dx = edge_p1_dx * (1 - c.t) + edge_p2_dx * c.t;
+        Vec2 rel_dx = particle_dx - proj_dx;
+        Vec2 rel_dx_tangent = rel_dx - c.normal * rel_dx.Dot(c.normal);
+        const float rel_dx_tangent_len = rel_dx_tangent.Length();
+        Vec2 tangent_dir = rel_dx_tangent / rel_dx_tangent_len;
+        
+        if (rel_dx_tangent_len <= 1e-6f) continue;
+
+        const float mu = std::sqrt(world.particle_frictions_[c.body_a_particle_idx] * world.particle_frictions_[c.body_b_p1_idx]);
+        const float normal_dx = -C;
+        const float final_friction = std::min(rel_dx_tangent_len, normal_dx * mu);
+
+        const float delta_lambda_t = final_friction / w_sum;
+        
+        world.particle_positions_[c.body_a_particle_idx] -= tangent_dir * delta_lambda_t * w_p;
+        world.particle_positions_[c.body_b_p1_idx] += tangent_dir * delta_lambda_t * w_a;
+        world.particle_positions_[c.body_b_p2_idx] += tangent_dir * delta_lambda_t * w_b;
+        
     }
 }
 
