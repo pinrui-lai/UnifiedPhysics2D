@@ -13,6 +13,7 @@ BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2&
     
     positions_.emplace_back(pos);
     rotations_.emplace_back(rotation);
+    rots_.emplace_back(std::cos(rotation), std::sin(rotation));
     velocities_.emplace_back(velocity);
     angular_velocities_.emplace_back(angular_velocity);
     forces_.emplace_back(Vec2{0.0f, 0.0f});

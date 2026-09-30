@@ -4,6 +4,7 @@
 
 #include "types.h"
 
+struct Rot;
 struct PolygonShape;
 struct BoxShape;
 class PhysicsWorld;
@@ -29,7 +30,7 @@ private:
     
     static void BuildBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_aabbs);
     static void QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
-    static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, float rot, const Aabb& local_aabb);
+    static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, Rot rot, const Aabb& local_aabb);
     static uint32_t ExpandBits(uint32_t bits);
     static uint32_t GetMortonCode(const Vec2& pos, float min_x, float min_y, float max_x, float max_y);
     static uint32_t BuildBvhRecursive(PhysicsWorld& world, std::pmr::vector<Item>& items, const std::pmr::vector<Aabb>& world_aabbs, int start, int end);

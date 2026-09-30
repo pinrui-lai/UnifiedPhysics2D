@@ -34,6 +34,25 @@ struct RotationComponent
     float val;
 };
 
+struct Rot {
+    float c, s; // c = cos(angle), s = sin(angle)
+    
+    void Set(const float angle) {
+        c = std::cos(angle);
+        s = std::sin(angle);
+    }
+
+    // Rotation
+    Vec2 Mul(const Vec2& v) const {
+        return Vec2(c * v.x - s * v.y, s * v.x + c * v.y);
+    }
+
+    // Reverse Rotation
+    Vec2 MulT(const Vec2& v) const {
+        return Vec2(c * v.x + s * v.y, -s * v.x + c * v.y);
+    }
+};
+
 struct RigidBodyComponent
 {
     float inv_mass{1.f};

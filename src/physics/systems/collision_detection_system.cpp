@@ -208,12 +208,8 @@ Vec2 CollisionDetectionSystem::GetSupport(const PhysicsWorld& world, const uint3
         [&](const CircleShape& c){ return world.positions_[i].val + dir.Normalized() * c.radius; },
             [&](const BoxShape& b)
                 {
-                    const float sin_rotation = std::sin(world.rotations_[i].val);
-                    const float cos_rotation = std::cos(world.rotations_[i].val);
-                
                     // Rotate dir to box's local space (rotate `-world.rotations_[i]` )
-                    // cos(-theta) == cos(theta)   sin(-theta) == -sin(theta)
-                    const Vec2 local_dir{dir.x * cos_rotation + dir.y * sin_rotation, -dir.x * sin_rotation + dir.y * cos_rotation};
+                    const Vec2 local_dir{world.rots_[i].MulT(dir)};
                 
                    // Box's local vertices are half_width/half_height with sign.
                    // In local space, the vertex has same sign with local_dir is support point.
@@ -222,8 +218,7 @@ Vec2 CollisionDetectionSystem::GetSupport(const PhysicsWorld& world, const uint3
                        , std::copysign(b.half_height, local_dir.y)};
                     
                    // Transform local_support to world coordinate (rotate + translate).
-                   return Vec2{local_support.x * cos_rotation - local_support.y * sin_rotation + world.positions_[i].val.x
-                       , local_support.x * sin_rotation + local_support.y * cos_rotation + world.positions_[i].val.y};
+                    return world.rots_[i].Mul(local_support) + world.positions_[i].val;
                 },
         [&](const PolygonShape& p){ return Vec2{0.f, 0.f}; },
     }, s);
@@ -501,8 +496,7 @@ std::array<Vec2, 4> CollisionDetectionSystem::GetVertices(const PhysicsWorld& wo
     vertices[2] = {box_shape.half_width, -box_shape.half_height};
     vertices[3] = {-box_shape.half_width, -box_shape.half_height};
     
-    std::ranges::transform(vertices, vertices.begin(), [&](const Vec2 v){ return Vec2{v.x * std::cos(world.rotations_[i].val) - v.y * std::sin(world.rotations_[i].val)
-        , v.x * std::sin(world.rotations_[i].val) + v.y * std::cos(world.rotations_[i].val)} + world.positions_[i].val; });
+    std::ranges::transform(vertices, vertices.begin(), [&](const Vec2 v){ return world.rots_[i].Mul(v) + world.positions_[i].val; });
     
     return vertices;
 }
@@ -517,7 +511,7 @@ std::span<const Vec2> CollisionDetectionSystem::GetVertices(PhysicsWorld& world,
     return local_vertices;
 }
 
-Aabb CollisionDetectionSystem::ComputeFastAabbFromLocalAabb(const Vec2& pos, const float rot, const Aabb& local_aabb)
+Aabb CollisionDetectionSystem::ComputeFastAabbFromLocalAabb(const Vec2& pos, const Rot rot, const Aabb& local_aabb)
 {
     const Vec2 local_aabb_min{local_aabb.min_x, local_aabb.min_y};
     const Vec2 local_aabb_max{local_aabb.max_x, local_aabb.max_y};
@@ -527,12 +521,10 @@ Aabb CollisionDetectionSystem::ComputeFastAabbFromLocalAabb(const Vec2& pos, con
     const Vec2 local_extent = (local_aabb_max - local_aabb_min) * 0.5f;
 
     // Transform center to world space.
-    const float c = std::cos(rot);
-    const float s = std::sin(rot);
-    const Vec2 world_center = Vec2{local_center.x * c - local_center.y * s, local_center.x * s + local_center.y * c} + pos;
+    const Vec2 world_center = rot.Mul(local_center) + pos;
 
-    const float abs_c = std::abs(c);
-    const float abs_s = std::abs(s);
+    const float abs_c = std::abs(rot.c);
+    const float abs_s = std::abs(rot.s);
 
     // Calculate extent of AABB of rotated Local AABB(OBB)
     const Vec2 world_extent{
@@ -591,7 +583,7 @@ void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aa
             }
             else
             {
-                world_aabbs.push_back(ComputeFastAabbFromLocalAabb(world.positions_[i].val, world.rotations_[i].val, world.local_aabbs_[i]));
+                world_aabbs.push_back(ComputeFastAabbFromLocalAabb(world.positions_[i].val, world.rots_[i], world.local_aabbs_[i]));
             }
             
         }, world.shapes_[i]);
@@ -753,9 +745,9 @@ void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, 
     std::visit(Overload{
         [&](const BoxShape& b)
         {
-            const float s = std::sin(world.rotations_[query_obj_idx].val);
-            const float c = std::cos(world.rotations_[query_obj_idx].val);
-            
+            const float s = world.rots_[query_obj_idx].s;
+            const float c = world.rots_[query_obj_idx].c;
+         
             Vec2 p_pos_map_to_box = world.particle_positions_[particle_idx] - world.positions_[query_obj_idx].val;
             p_pos_map_to_box = {p_pos_map_to_box.x * c + p_pos_map_to_box.y * s , - p_pos_map_to_box.x * s + p_pos_map_to_box.y * c};
             const float depth = SdfBox(p_pos_map_to_box, {b.half_width, b.half_height});

@@ -164,6 +164,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
 
     const auto& positions = world.GetPositions();
     const auto& rotations = world.GetRotations();
+    const auto& rots = world.GetRots();
     // const auto& vertices = world.GetVertices();
     const auto& shapes = world.GetShapes();
     
@@ -179,8 +180,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
             draw_list->AddCircle(center, radius, IM_COL32(255, 0, 0, 255), 0, 2.f);
             
             // Draw a rotation indicator line (line from center to circumference).
-            const float rot = -rotations[i].val;
-            const ImVec2 rad_line(center.x + radius * std::cos(rot), center.y + radius * std::sin(rot));
+            const ImVec2 rad_line(center.x + radius * rots[i].c, center.y + radius * (-rots[i].s));
             draw_list->AddLine(center, rad_line, IM_COL32(255, 0, 0, 255), 1.5f);
         },
         [&](const BoxShape& b)
@@ -193,13 +193,10 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
                 }};
             
             std::array<ImVec2, 4> draw_vertices;
-                const float cos_r = std::cos(rotations[i].val);
-                const float sin_r = std::sin(rotations[i].val);
-
                 for (uint8_t idx = 0; idx < 4; ++idx) {
                     const Vec2 v = local_vertices[idx];
-                    const float wx = (v.x * cos_r - v.y * sin_r + positions[i].val.x) * physics_config::kPpm;
-                    const float wy = float_h - (v.x * sin_r + v.y * cos_r + positions[i].val.y) * physics_config::kPpm;
+                    const float wx = (v.x * rots[i].c - v.y * rots[i].s + positions[i].val.x) * physics_config::kPpm;
+                    const float wy = float_h - (v.x * rots[i].s + v.y * rots[i].c + positions[i].val.y) * physics_config::kPpm;
                     draw_vertices[idx] = ImVec2(wx, wy);
                 }
 

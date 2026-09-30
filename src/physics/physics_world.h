@@ -30,13 +30,14 @@ class PhysicsWorld
 {
 private:
     std::vector<RigidBodyComponent> rigid_bodies_;
+    std::vector<Vec2> forces_;
     std::vector<PositionComponent> positions_;
+    std::vector<RotationComponent> rotations_;
+    std::vector<Rot> rots_;
     std::vector<LinearVelocityComponent> velocities_;
     std::vector<AngularVelocityComponent> angular_velocities_;
-    std::vector<Vec2> forces_;
     std::vector<PseudoLinearVelocityComponent> pseudo_velocities_;
     std::vector<PseudoAngularVelocityComponent> pseudo_angular_velocities_;
-    std::vector<RotationComponent> rotations_;
     std::vector<Shape> shapes_;
     std::vector<Vec2> vertices_;
     std::vector<Aabb> local_aabbs_;
@@ -85,6 +86,7 @@ public:
     std::span<Vec2> GetSoftBodyParticlePositions(uint32_t i);
     const std::vector<PositionComponent>& GetPositions() { return positions_; }
     const std::vector<RotationComponent>& GetRotations() { return rotations_; }
+    const std::vector<Rot>& GetRots() { return rots_; }
     const std::vector<Shape>& GetShapes() { return shapes_; }
     const std::vector<Vec2>& GetVertices() { return vertices_; }
     const std::vector<BvhNode>& GetBvhNodes() { return bvh_tree_nodes_; }
