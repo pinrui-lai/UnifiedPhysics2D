@@ -10,13 +10,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     
     world.debug_incident_edges_.clear();
     world.debug_reference_edges_.clear();
-        
-    // Mark all manifold's is_overlapping false.
-    for (auto& manifold : world.manifolds_)
-    {
-        manifold.is_overlapping = false;
-    }
-    
+
     // ===== Broad-Phase =====
     auto start = Clock::now();
     const uint32_t rigid_count = world.positions_.size();
@@ -53,10 +47,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     
     // Remove manifold whose AABBs no longer overlap.
     start = Clock::now();
-    std::erase_if(world.manifolds_, [](const Manifold& manifold)
-    {
-        return manifold.is_overlapping == false;
-    });
+    CleanupStaleManifolds(world);
     world.profile_data_.erase_manifold_ms += Duration(Clock::now() - start).count();
     world.profile_data_.broad_phase_ms = (world.profile_data_.build_bvh_ms + world.profile_data_.query_bvh_ms + world.profile_data_.erase_manifold_ms);
     
@@ -548,28 +539,6 @@ Aabb CollisionDetectionSystem::ComputeFastAabbFromLocalAabb(const Vec2& pos, con
     return Aabb{.min_x = world_aabb_min.x, .min_y = world_aabb_min.y, .max_x = world_aabb_max.x, .max_y = world_aabb_max.y };
 }
 
-uint32_t CollisionDetectionSystem::ExpandBits(uint32_t bits)
-{
-     // 00000000 00000000 11111111 11111111 -> 00000000 11111111 00000000 11111111 -> 00001111 00001111 00001111 00001111 ...
-    bits = (bits | (bits << 8)) & 0x00FF00FF;
-    bits = (bits | (bits << 4)) & 0x0F0F0F0F;
-    bits = (bits | (bits << 2)) & 0x33333333;
-    bits = (bits | (bits << 1)) & 0x55555555;
-    return bits;
-}
-
-uint32_t CollisionDetectionSystem::GetMortonCode(const Vec2& pos, const float min_x, const float min_y, const float max_x, const float max_y)
-{
-    // Clamp to avoid floating-point precision issues.
-    const float norm_x = std::clamp((pos.x - min_x) / (max_x - min_x), 0.0f, 1.0f);
-    const float norm_y = std::clamp((pos.y - min_y) / (max_y - min_y), 0.0f, 1.0f);
-
-    const uint32_t x = static_cast<uint32_t>(norm_x * 65535.f);
-    const uint32_t y = static_cast<uint32_t>(norm_y * 65535.f);
-    
-    return (ExpandBits(y) << 1) | ExpandBits(x); 
-}
-
 void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_aabbs)
 {
     const uint32_t rigid_count = world.positions_.size();
@@ -623,21 +592,23 @@ void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aa
     for (const auto& world_aabb : world_aabbs) {
         scene_aabb = Aabb::Combine(scene_aabb, world_aabb);
     }
-
+    float inv_scene_aabb_width = 1 / (scene_aabb.max_x - scene_aabb.min_x);
+    float inv_scene_aabb_height = 1 / (scene_aabb.max_y - scene_aabb.min_y);
+    
     // Get Morton Code and create sort item.
     std::pmr::vector<Item> items(&world.frame_arena_);
     items.reserve(world_aabbs.size());
     
     for (uint32_t i = 0; i < rigid_count; ++i)
     {
-        items.emplace_back(i, GetMortonCode(world.positions_[i].val, scene_aabb.min_x, scene_aabb.min_y, scene_aabb.max_x, scene_aabb.max_y));
+        items.emplace_back(i, GetMortonCode(world.positions_[i].val, scene_aabb.min_x, scene_aabb.min_y, inv_scene_aabb_width, inv_scene_aabb_height));
     }
     for (uint32_t i = 0; i < soft_count; ++i)
     {
         const uint32_t unified_idx = rigid_count + i;
         auto& [min_x, min_y, max_x, max_y] = world_aabbs[unified_idx];
         auto center = Vec2{(max_x - min_x) * 0.5f, (max_y - min_y) * 0.5f};
-        items.emplace_back(unified_idx, GetMortonCode(center, scene_aabb.min_x, scene_aabb.min_y, scene_aabb.max_x, scene_aabb.max_y));
+        items.emplace_back(unified_idx, GetMortonCode(center, scene_aabb.min_x, scene_aabb.min_y, inv_scene_aabb_width, inv_scene_aabb_height));
     }
     
     // Sort by morton code.
@@ -652,68 +623,71 @@ void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vec
     if (world.bvh_tree_root_index_ == std::numeric_limits<uint32_t>::max()) return;
     
     const uint32_t rigid_count = world.positions_.size();
+    const bool is_query_rigid = (query_obj_idx < rigid_count);
+    const Aabb query_aabb = world_aabbs[query_obj_idx];
     
-    std::pmr::vector<uint32_t> stack(&world.frame_arena_);
-    stack.reserve(64);
-    stack.push_back(world.bvh_tree_root_index_);
+    uint32_t stack[64];
+    uint32_t stack_ptr = 0;
+    stack[stack_ptr++] = world.bvh_tree_root_index_;
 
-    while (!stack.empty()) {
-        const uint32_t curr = stack.back();
-        stack.pop_back();
-
-        if (const BvhNode& node = world.bvh_tree_nodes_[curr]; Aabb::Overlap(node.aabb, world_aabbs[query_obj_idx])) 
+    while (stack_ptr > 0) {
+        const uint32_t curr = stack[--stack_ptr];
+        const BvhNode& node = world.bvh_tree_nodes_[curr];
+        
+        if (!Aabb::Overlap(node.aabb, query_aabb))  continue;
+        
+        if (node.IsLeaf()) 
         {
-            if (node.IsLeaf()) 
+            const uint32_t leaf_id = node.leaf_id;
+            
+            // Rigid vs Rigid
+            if ( leaf_id < rigid_count)
             {
-                // Rigid vs Rigid
-                if (const uint32_t leaf_id = node.leaf_id; leaf_id < rigid_count)
+                if (!is_query_rigid || leaf_id <= query_obj_idx) continue; // Prevent "self-collision" and "duplicate pair (a, b) and (b, a)".
+            
+                const uint64_t pair_key = MakePairKey(query_obj_idx, leaf_id);
+
+                // Find if the manifold already exist. 
+                if (auto it = world.manifold_map_.find(pair_key); it != world.manifold_map_.end()) 
                 {
-                    if (node.leaf_id == query_obj_idx || query_obj_idx >= rigid_count) continue;
+                    const size_t manifold_idx = it->second;
+                    world.manifolds_[manifold_idx].is_overlapping = true;
+                } 
+                else 
+                {
+                    const size_t new_idx = world.manifolds_.size();
+                    world.manifolds_.emplace_back(query_obj_idx, leaf_id);
+                    world.manifold_map_[pair_key] = new_idx;
+                }
+            }
+            else
+            {
+                const uint32_t soft_idx = leaf_id - rigid_count;
                 
-                    auto it = std::ranges::find_if(world.manifolds_, [&](const Manifold& manifold)
+                // Rigid vs Soft (Particle)
+                if (is_query_rigid)
+                {
+                    const auto& soft_handle = world.soft_body_handles_[soft_idx];
+                    for (uint32_t i = soft_handle.start_surface_particle_idx; i < soft_handle.start_surface_particle_idx + soft_handle.surface_particle_count; ++i)
                     {
-                        return (manifold.a == query_obj_idx && manifold.b == node.leaf_id)
-                            || (manifold.b == query_obj_idx && manifold.a == node.leaf_id);
-                    });
-                
-                    if (it != world.manifolds_.end()) 
-                    {
-                        it->is_overlapping = true;
-                    }
-                    else
-                    {
-                        world.manifolds_.emplace_back(query_obj_idx, node.leaf_id);
+                        const auto particle_idx = world.surface_particles_idx_[i]; // Only detect surface particle of soft body
+                        rigid_soft_contacts.emplace_back(query_obj_idx, particle_idx);
                     }
                 }
+                // Soft vs Soft
                 else
                 {
-                    const uint32_t soft_idx = leaf_id - rigid_count;
-                    
-                    // Rigid vs Soft (Particle)
-                    if (query_obj_idx < rigid_count)
-                    {
-                        const auto& soft_handle = world.soft_body_handles_[soft_idx];
-                        for (uint32_t i = soft_handle.start_surface_particle_idx; i < soft_handle.start_surface_particle_idx + soft_handle.surface_particle_count; ++i)
-                        {
-                            const auto particle_idx = world.surface_particles_idx_[i]; // Only detect surface particle of soft body
-                            rigid_soft_contacts.emplace_back(query_obj_idx, particle_idx);
-                        }
-                    }
-                    // Soft vs Soft
-                    else
-                    {
-                        const uint32_t query_soft_idx = query_obj_idx - rigid_count;
-                        if (query_soft_idx == soft_idx) continue;
-                        
+                    const uint32_t query_soft_idx = query_obj_idx - rigid_count;
+                    if (query_soft_idx < soft_idx) {
                         soft_soft_contacts.emplace_back(query_soft_idx, soft_idx);
                     }
                 }
-            } 
-            else
-            {
-                stack.push_back(node.left_child);
-                stack.push_back(node.right_child);
             }
+        } 
+        else
+        {
+            stack[stack_ptr++] = node.left_child;
+            stack[stack_ptr++] = node.right_child;
         }
     }
 }
@@ -747,6 +721,39 @@ uint32_t CollisionDetectionSystem::BuildBvhRecursive(PhysicsWorld& world, std::p
     world.bvh_tree_nodes_[node_index].right_child = right_node_index;
     
     return node_index;
+}
+
+void CollisionDetectionSystem::CleanupStaleManifolds(PhysicsWorld& world)
+{
+    for (size_t i = 0; i < world.manifolds_.size(); ) 
+    {
+        if (auto& manifold = world.manifolds_[i]; !manifold.is_overlapping) 
+        {
+            const uint64_t key_to_remove = MakePairKey(manifold.a, manifold.b);
+
+            if (const size_t last_idx = world.manifolds_.size() - 1; i != last_idx) 
+            {
+                // Swap
+                const auto& last_manifold = world.manifolds_[last_idx];
+                const uint64_t last_key = MakePairKey(last_manifold.a, last_manifold.b);
+
+                world.manifolds_[i] = last_manifold;
+                world.manifold_map_[last_key] = i; // Update index of the moved manifold in the Hash Map.
+            }
+
+            // Pop
+            world.manifolds_.pop_back();
+            world.manifold_map_.erase(key_to_remove);
+
+            // Don't increment 'i' here because the manifold that was just moved in needs to be checked in the next loop.
+        } 
+        else 
+        {
+            // Reset is_overlapping for next frame.
+            manifold.is_overlapping = false;
+            ++i;
+        }
+    }
 }
 
 void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, const uint32_t query_obj_idx, const uint32_t particle_idx)

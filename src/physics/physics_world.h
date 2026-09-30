@@ -2,6 +2,7 @@
 
 #include <memory_resource>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
 #include "components.h"
@@ -134,6 +135,7 @@ public:
     std::vector<BvhNode> bvh_tree_nodes_;
     uint32_t bvh_tree_root_index_{std::numeric_limits<uint32_t>::max()};
     std::vector<Manifold> manifolds_;
+    std::unordered_map<uint64_t, uint32_t> manifold_map_;
     
     bool show_debug_contact_points_ = true;
     bool show_debug_clipping_ = true;
