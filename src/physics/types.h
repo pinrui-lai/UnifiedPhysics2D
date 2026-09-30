@@ -78,19 +78,18 @@ struct Manifold
 {
     std::array<Contact, 2> contacts;
     Vec2 normal;
-    size_t a;
-    size_t b;
-    size_t contact_count{0};
-    static constexpr float break_distance_sq{0.01f}; // distance threshold square
+    uint32_t a;
+    uint32_t b;
+    uint8_t contact_count{0};
     bool is_overlapping{true};
     
-    Manifold(const size_t a, const size_t b) : a(a), b(b){}
+    Manifold(const uint32_t a, const uint32_t b) : a(a), b(b){}
 };
 
 struct XpbdDistanceConstraint
 {
-    size_t p1;
-    size_t p2;
+    uint32_t p1;
+    uint32_t p2;
     float rest_length;
     float compliance;
     float lambda{0.0f};
@@ -99,8 +98,8 @@ struct XpbdDistanceConstraint
 // Rigid-Particle Collision Constraint
 struct XpbdContactConstraint
 {
-    size_t particle_idx;
-    size_t body_idx;
+    uint32_t particle_idx;
+    uint32_t body_idx;
     Vec2 contact_normal;
     Vec2 contact_point;
     float depth;
@@ -108,7 +107,7 @@ struct XpbdContactConstraint
 
 struct XpbdTriangleAreaConstraint
 {
-    size_t p1, p2, p3; // Clockwise
+    uint32_t p1, p2, p3; // Clockwise
     float rest_area;
     float compliance{0.0f};
     float lambda{0.0f};
@@ -117,8 +116,8 @@ struct XpbdTriangleAreaConstraint
 struct XpbdGlobalAreaConstraint
 {
     // Particles arranged clockwise. 
-    size_t start_particle_idx{0};
-    size_t particle_count{0};
+    uint32_t start_particle_idx{0};
+    uint16_t particle_count{0};
     float rest_area;
     float compliance{0.0f};
     float lambda{0.0f};
@@ -126,45 +125,45 @@ struct XpbdGlobalAreaConstraint
 
 struct XpbdParticleEdgeCollisionConstraint {
     Vec2 normal;
-    size_t body_a_particle_idx;
-    size_t body_b_p1_idx;
-    size_t body_b_p2_idx;
+    uint32_t body_a_particle_idx;
+    uint32_t body_b_p1_idx;
+    uint32_t body_b_p2_idx;
     float penetration;
     float t; // The ratio of the projected points on the line segment is [0, 1].
 };
 
 struct BodyHandle
 {
-    size_t id;
+    uint32_t id;
     bool IsValid() const { return id != 0xFFFFFFFF; }
 };
 
 struct SoftBodyHandle
 {
-    size_t start_particle_idx{0};
-    size_t particle_count{0};
-    size_t start_edge_idx{0};
-    size_t edge_count{0};
-    size_t start_surface_particle_idx{0};
-    size_t surface_particle_count{0};
+    uint32_t start_particle_idx{0};
+    uint32_t start_edge_idx{0};
+    uint32_t start_surface_particle_idx{0};
+    uint16_t surface_particle_count{0};
+    uint16_t edge_count{0};
+    uint16_t particle_count{0};
     
     bool IsValid() const { return particle_count > 0; }
 };
 
-template <typename T, size_t Capacity>
+template <typename T, uint8_t Capacity>
 struct FixedVector 
 {
     std::array<T, Capacity> data{};
-    size_t sz = 0;
+    uint8_t sz = 0;
 
     void push_back(const T& val) 
     {
         data[sz++] = val;
     }
     
-    void insert(size_t index, const T& val)
+    void insert(uint8_t index, const T& val)
     {
-        for (size_t i = sz; i > index; --i)
+        for (uint8_t i = sz; i > index; --i)
         {
             data[i] = data[i - 1];
         }
@@ -172,22 +171,22 @@ struct FixedVector
         ++sz;
     }
 
-    void erase_at(const size_t index) 
+    void erase_at(const uint8_t index) 
     {
-        for (size_t i = index; i < sz - 1; ++i) 
+        for (uint8_t i = index; i < sz - 1; ++i) 
         {
             data[i] = data[i + 1];
         }
         --sz;
     }
 
-    T& operator[](size_t i) { return data[i]; }
-    const T& operator[](size_t i) const { return data[i]; }
+    T& operator[](uint8_t i) { return data[i]; }
+    const T& operator[](uint8_t i) const { return data[i]; }
 
     Vec2& back() { return data[sz - 1]; }
     const Vec2& back() const  { return data[sz - 1]; }
-    size_t size() const { return sz; }
-    static constexpr size_t capacity() { return Capacity; }
+    uint8_t size() const { return sz; }
+    static constexpr uint8_t capacity() { return Capacity; }
 };
 
 using FixedSimplex = FixedVector<Vec2, 3>;
@@ -214,15 +213,15 @@ struct Aabb
 struct BvhNode
 {
     Aabb aabb;
-    size_t left_child{std::numeric_limits<size_t>::max()};
-    size_t right_child{std::numeric_limits<size_t>::max()};
-    size_t leaf_id{std::numeric_limits<size_t>::max()};
+    uint32_t left_child{std::numeric_limits<uint32_t>::max()};
+    uint32_t right_child{std::numeric_limits<uint32_t>::max()};
+    uint32_t leaf_id{std::numeric_limits<uint32_t>::max()};
     
-    bool IsLeaf() const { return leaf_id != std::numeric_limits<size_t>::max(); }
+    bool IsLeaf() const { return leaf_id != std::numeric_limits<uint32_t>::max(); }
 };
 
 struct Item
 {
-    size_t id;
+    uint32_t id;
     uint32_t morton_code;
 };

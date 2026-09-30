@@ -4,9 +4,9 @@
 
 void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
 {
-    const size_t count = world.particle_positions_.size();
+    const uint32_t count = world.particle_positions_.size();
 
-    for (size_t i = 0; i < count; ++i)
+    for (uint32_t i = 0; i < count; ++i)
     {
         if (world.particle_inv_masses_[i] == 0.0f) continue;
 
@@ -23,8 +23,8 @@ void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
 
 void XpbdSolver::SolveDistanceConstraint(PhysicsWorld& world, const float inv_sdt_sq, XpbdDistanceConstraint& c)
 {
-    const size_t i1 = c.p1;
-    const size_t i2 = c.p2;
+    const uint32_t i1 = c.p1;
+    const uint32_t i2 = c.p2;
     
     const float w1 = world.particle_inv_masses_[i1];
     const float w2 = world.particle_inv_masses_[i2];
@@ -57,7 +57,7 @@ void XpbdSolver::SolveDistanceConstraint(PhysicsWorld& world, const float inv_sd
 
 void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, float inv_sdt_sq, XpbdTriangleAreaConstraint& c)
 {
-    const size_t i1 = c.p1, i2 = c.p2, i3 = c.p3; // Clockwise
+    const uint32_t i1 = c.p1, i2 = c.p2, i3 = c.p3; // Clockwise
     
     const float w1 = world.particle_inv_masses_[i1];
     const float w2 = world.particle_inv_masses_[i2];
@@ -100,10 +100,10 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
         if (c.particle_count < 3) return;
 
         float current_area = 0.0f;
-        for (size_t i = 0; i < c.particle_count; ++i)
+        for (uint16_t i = 0; i < c.particle_count; ++i)
         {
-            const size_t curr = c.start_particle_idx + i;
-            const size_t next = c.start_particle_idx + ((i + 1) % c.particle_count);
+            const uint32_t curr = c.start_particle_idx + i;
+            const uint32_t next = c.start_particle_idx + ((i + 1) % c.particle_count);
             const Vec2& p1 = world.particle_positions_[curr];
             const Vec2& p2 = world.particle_positions_[next];
         
@@ -118,10 +118,10 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
         grads.resize(c.particle_count);
         float grad_sq_sum = 0.0f;
 
-        for (size_t i = 0; i < c.particle_count; ++i)
+        for (uint16_t i = 0; i < c.particle_count; ++i)
         {
-            const size_t prev_idx = c.start_particle_idx + ((i + c.particle_count - 1) % c.particle_count);
-            const size_t next_idx = c.start_particle_idx + ((i + 1) % c.particle_count);
+            const uint32_t prev_idx = c.start_particle_idx + ((i + c.particle_count - 1) % c.particle_count);
+            const uint32_t next_idx = c.start_particle_idx + ((i + 1) % c.particle_count);
 
             const Vec2& p_prev = world.particle_positions_[prev_idx];
             const Vec2& p_next = world.particle_positions_[next_idx];
@@ -129,7 +129,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
             // Grad_i = 0.5 * (y_{i-1} - y_{i+1}, x_{i+1} - x_{i-1})
             grads[i] = Vec2{ 0.5f * (p_prev.y - p_next.y), 0.5f * (p_next.x - p_prev.x) };
 
-            const size_t curr_idx = c.start_particle_idx + i;
+            const uint32_t curr_idx = c.start_particle_idx + i;
             const float w = world.particle_inv_masses_[curr_idx];
             grad_sq_sum += w * grads[i].LengthSquared();
         }
@@ -140,9 +140,9 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
         const float delta_lambda = (-C - alpha_tilde * c.lambda) / (grad_sq_sum + alpha_tilde);
         c.lambda += delta_lambda;
         
-        for (size_t i = 0; i < c.particle_count; ++i)
+        for (uint16_t i = 0; i < c.particle_count; ++i)
         {
-            const size_t curr_idx = c.start_particle_idx + i;
+            const uint32_t curr_idx = c.start_particle_idx + i;
             const float w = world.particle_inv_masses_[curr_idx];
             if (w > 0.0f)
             {
@@ -268,8 +268,8 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
 
 void XpbdSolver::FinalizeParticles(PhysicsWorld& world, float inv_sdt)
 {
-    const size_t count = world.particle_positions_.size();
-    for (size_t i = 0; i < count; ++i)
+    const uint32_t count = world.particle_positions_.size();
+    for (uint32_t i = 0; i < count; ++i)
     {
         if (world.particle_inv_masses_[i] == 0.0f) continue;
 

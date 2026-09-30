@@ -3,21 +3,21 @@
 
 void MovementSystem::IntegrateVelocity(PhysicsWorld& world, const float dt)
 {
-    const size_t count = world.positions_.size();
+    const uint32_t count = world.positions_.size();
     
-    for (size_t i = 0; i < count; ++i)
+    for (uint32_t i = 0; i < count; ++i)
     {
-        if (world.rigid_bodies_[i].mass == 0.0f) continue;
+        if (world.rigid_bodies_[i].inv_mass == 0.0f) continue;
         
-        world.velocities_[i].val += (world.rigid_bodies_[i].force * world.rigid_bodies_[i].inv_mass) * dt;
-        world.rigid_bodies_[i].force = {0.f, 0.f};
+        world.velocities_[i].val += (world.forces_[i] * world.rigid_bodies_[i].inv_mass) * dt;
+        world.forces_[i] = {0.f, 0.f};
     }
 }
 
 void MovementSystem::IntegratePosition(PhysicsWorld& world, const float dt)
 {
-    const size_t count = world.positions_.size();
-    for (size_t i = 0; i < count; ++i)
+    const uint32_t count = world.positions_.size();
+    for (uint32_t i = 0; i < count; ++i)
     {
         // Split Impulse : use both velocity and  pseudo-velocity to update position.
         world.positions_[i].val += world.velocities_[i].val * dt;

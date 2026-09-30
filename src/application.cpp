@@ -196,7 +196,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
                 const float cos_r = std::cos(rotations[i].val);
                 const float sin_r = std::sin(rotations[i].val);
 
-                for (size_t idx = 0; idx < 4; ++idx) {
+                for (uint8_t idx = 0; idx < 4; ++idx) {
                     const Vec2 v = local_vertices[idx];
                     const float wx = (v.x * cos_r - v.y * sin_r + positions[i].val.x) * physics_config::kPpm;
                     const float wy = float_h - (v.x * sin_r + v.y * cos_r + positions[i].val.y) * physics_config::kPpm;
@@ -251,7 +251,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         {
             if (manifold.contact_count == 0) continue;
         
-            for (size_t i = 0; i < manifold.contact_count; ++i)
+            for (uint8_t i = 0; i < manifold.contact_count; ++i)
             {
                 ImVec2 pt_a(manifold.contacts[i].collision_point_a.x * physics_config::kPpm, float_h - manifold.contacts[i].collision_point_a.y * physics_config::kPpm);
                 ImVec2 pt_b(manifold.contacts[i].collision_point_b.x * physics_config::kPpm, float_h - manifold.contacts[i].collision_point_b.y * physics_config::kPpm);
@@ -571,11 +571,11 @@ void Application::DrawBvhNode(ImDrawList* draw_list, const std::vector<BvhNode>&
 
     // Recursively draw subtree
     if (!node.IsLeaf()) {
-        if (node.left_child != std::numeric_limits<size_t>::max())
+        if (node.left_child != std::numeric_limits<uint32_t>::max())
         {
             DrawBvhNode(draw_list, nodes, node.left_child, current_depth + 1, max_render_depth, hovered_node_idx, window_height);
         }
-        if (node.right_child != std::numeric_limits<size_t>::max())
+        if (node.right_child != std::numeric_limits<uint32_t>::max())
         {
             DrawBvhNode(draw_list, nodes, node.right_child, current_depth + 1, max_render_depth, hovered_node_idx, window_height);    
         }
@@ -605,7 +605,7 @@ void Application::RenderBvhDebug(const std::vector<BvhNode>& nodes, const int ro
         );
 
         // Connect red line to the Left Child and mark it with a red dot.
-        if (target.left_child != std::numeric_limits<size_t>::max()) {
+        if (target.left_child != std::numeric_limits<uint32_t>::max()) {
             ImVec2 left_center = GetAabbCenter(nodes[target.left_child].aabb);
             left_center = {left_center.x * physics_config::kPpm, window_height - left_center.y * physics_config::kPpm};
             draw_list->AddLine(target_center, left_center, IM_COL32(255, 50, 50, 255), 2.0f);
@@ -613,7 +613,7 @@ void Application::RenderBvhDebug(const std::vector<BvhNode>& nodes, const int ro
         }
 
         // Right Child blue.
-        if (target.right_child != std::numeric_limits<size_t>::max()) {
+        if (target.right_child != std::numeric_limits<uint32_t>::max()) {
             ImVec2 right_center = GetAabbCenter(nodes[target.right_child].aabb);
             right_center = {right_center.x * physics_config::kPpm, window_height - right_center.y * physics_config::kPpm};
             draw_list->AddLine(target_center, right_center, IM_COL32(50, 150, 255, 255), 2.0f);

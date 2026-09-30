@@ -11,11 +11,11 @@ void CollisionSolverSystem::SolveCollision(PhysicsWorld& world)
     {
         if (manifold.contact_count == 0) continue;
         
-        for (size_t i = 0; i < manifold.contact_count; ++i)
+        for (uint8_t i = 0; i < manifold.contact_count; ++i)
         {
             InitializeContact(world, manifold, i);
         }
-        for (size_t i = 0; i < manifold.contact_count; ++i)
+        for (uint8_t i = 0; i < manifold.contact_count; ++i)
         {
             WarmStartContact(world, manifold, i);
         }
@@ -25,7 +25,7 @@ void CollisionSolverSystem::SolveCollision(PhysicsWorld& world)
         for (auto& manifold : world.manifolds_)
         {
             if (manifold.contact_count == 0) continue;
-            for (size_t i = 0; i < manifold.contact_count; ++i)
+            for (uint8_t i = 0; i < manifold.contact_count; ++i)
             {
                 SolveVelocityConstraint(world, manifold, i);
             }
@@ -36,7 +36,7 @@ void CollisionSolverSystem::SolveCollision(PhysicsWorld& world)
         for (auto& manifold : world.manifolds_)
         {
             if (manifold.contact_count == 0) continue;
-            for (size_t i = 0; i < manifold.contact_count; ++i)
+            for (uint8_t i = 0; i < manifold.contact_count; ++i)
             {
                 SolvePositionConstraint(world, manifold, i);
             }
@@ -44,7 +44,7 @@ void CollisionSolverSystem::SolveCollision(PhysicsWorld& world)
     }
 }
 
-void CollisionSolverSystem::InitializeContact(const PhysicsWorld& world, Manifold& manifold, const size_t contact_idx)
+void CollisionSolverSystem::InitializeContact(const PhysicsWorld& world, Manifold& manifold, const uint32_t contact_idx)
 {
     Contact& contact = manifold.contacts[contact_idx];
     contact.pseudo_impulse_sum = 0.0f;
@@ -92,7 +92,7 @@ void CollisionSolverSystem::InitializeContact(const PhysicsWorld& world, Manifol
     }
 }
 
-void CollisionSolverSystem::WarmStartContact(PhysicsWorld& world, const Manifold& manifold, const size_t contact_idx)
+void CollisionSolverSystem::WarmStartContact(PhysicsWorld& world, const Manifold& manifold, const uint32_t contact_idx)
 {
     const Contact& contact = manifold.contacts[contact_idx];
     const Vec2 tangent = manifold.normal.NormalWithoutNormalized();
@@ -105,19 +105,19 @@ void CollisionSolverSystem::WarmStartContact(PhysicsWorld& world, const Manifold
     
     // Warm Starting
     const Vec2 impulse = manifold.normal * contact.normal_impulse_sum + tangent * contact.tangent_impulse_sum;
-    if (rigid_body_a.mass > 0.f)
+    if (rigid_body_a.inv_mass > 0.f)
     {
         world.velocities_[manifold.a].val -= impulse * rigid_body_a.inv_mass;
         world.angular_velocities_[manifold.a].val -= ra.Cross(impulse) * rigid_body_a.inv_inertia;
     }
-    if (rigid_body_b.mass > 0.f)
+    if (rigid_body_b.inv_mass > 0.f)
     {
         world.velocities_[manifold.b].val += impulse * rigid_body_b.inv_mass;
         world.angular_velocities_[manifold.b].val += rb.Cross(impulse) * rigid_body_b.inv_inertia;
     }
 }
 
-void CollisionSolverSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifold& manifold, const size_t contact_idx)
+void CollisionSolverSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifold& manifold, const uint32_t contact_idx)
 {
     Contact& contact = manifold.contacts[contact_idx];
     
@@ -140,13 +140,13 @@ void CollisionSolverSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifol
     delta_impulse_magnitude = contact.normal_impulse_sum - old_impulse_magnitude;
     
     // Apply impulse, Jacobian Matrix of Penetration Constrain = [-(transpose n), -CrossProduct(ra, normal), transpose n, CrossProduct(ra, normal)] 
-    if (rigid_body_a.mass > 0.f)
+    if (rigid_body_a.inv_mass > 0.f)
     {
         world.velocities_[manifold.a].val -= manifold.normal * delta_impulse_magnitude * rigid_body_a.inv_mass;
         world.angular_velocities_[manifold.a].val -= ra.Cross(manifold.normal) * delta_impulse_magnitude * rigid_body_a.inv_inertia;
     }
     
-    if (rigid_body_b.mass > 0.f)
+    if (rigid_body_b.inv_mass > 0.f)
     {
         world.velocities_[manifold.b].val += manifold.normal * delta_impulse_magnitude * rigid_body_b.inv_mass;
         world.angular_velocities_[manifold.b].val += rb.Cross(manifold.normal) * delta_impulse_magnitude * rigid_body_b.inv_inertia;
@@ -170,27 +170,27 @@ void CollisionSolverSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifol
     contact.tangent_impulse_sum = std::clamp(old_impulse_tangent + delta_impulse_magnitude_tan, -max_friction, max_friction);
     delta_impulse_magnitude_tan = contact.tangent_impulse_sum - old_impulse_tangent;
     
-    if (rigid_body_a.mass > 0.f)
+    if (rigid_body_a.inv_mass > 0.f)
     {
         world.velocities_[manifold.a].val -= tangent * delta_impulse_magnitude_tan * rigid_body_a.inv_mass;
         world.angular_velocities_[manifold.a].val -= ra.Cross(tangent) * delta_impulse_magnitude_tan * rigid_body_a.inv_inertia;
     }
     
-    if (rigid_body_b.mass > 0.f)
+    if (rigid_body_b.inv_mass > 0.f)
     {
         world.velocities_[manifold.b].val += tangent * delta_impulse_magnitude_tan * rigid_body_b.inv_mass;
         world.angular_velocities_[manifold.b].val += rb.Cross(tangent) * delta_impulse_magnitude_tan * rigid_body_b.inv_inertia;
     }
 }
 
-void CollisionSolverSystem::SolvePositionConstraint(PhysicsWorld& world, Manifold& manifold, size_t contact_idx)
+void CollisionSolverSystem::SolvePositionConstraint(PhysicsWorld& world, Manifold& manifold, uint32_t contact_idx)
 {
     Contact& contact = manifold.contacts[contact_idx];
     
     const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[manifold.a];
     const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[manifold.b];
     
-    if (rigid_body_a.mass == 0.0f && rigid_body_b.mass == 0.0f) return;
+    if (rigid_body_a.inv_mass == 0.0f && rigid_body_b.inv_mass == 0.0f) return;
 
     const Vec2 ra = contact.collision_point_a - world.positions_[manifold.a].val;
     const Vec2 rb = contact.collision_point_b - world.positions_[manifold.b].val;
@@ -209,13 +209,13 @@ void CollisionSolverSystem::SolvePositionConstraint(PhysicsWorld& world, Manifol
     delta_pseudo_impulse_magnitude = contact.pseudo_impulse_sum - old_pseudo_impulse_magnitude;
     
     // Apply impulse, Jacobian Matrix of Penetration Constrain = [-(transpose n), -CrossProduct(ra, normal), transpose n, CrossProduct(ra, normal)] 
-    if (rigid_body_a.mass > 0.f)
+    if (rigid_body_a.inv_mass > 0.f)
     {
         world.pseudo_velocities_[manifold.a].val -= manifold.normal * delta_pseudo_impulse_magnitude * rigid_body_a.inv_mass;
         world.pseudo_angular_velocities_[manifold.a].val -= ra.Cross(manifold.normal) * delta_pseudo_impulse_magnitude * rigid_body_a.inv_inertia;
     }
     
-    if (rigid_body_b.mass > 0.f)
+    if (rigid_body_b.inv_mass > 0.f)
     {
         world.pseudo_velocities_[manifold.b].val += manifold.normal * delta_pseudo_impulse_magnitude * rigid_body_b.inv_mass;
         world.pseudo_angular_velocities_[manifold.b].val += rb.Cross(manifold.normal) * delta_pseudo_impulse_magnitude * rigid_body_b.inv_inertia;

@@ -33,6 +33,7 @@ private:
     std::vector<PositionComponent> positions_;
     std::vector<LinearVelocityComponent> velocities_;
     std::vector<AngularVelocityComponent> angular_velocities_;
+    std::vector<Vec2> forces_;
     std::vector<PseudoLinearVelocityComponent> pseudo_velocities_;
     std::vector<PseudoAngularVelocityComponent> pseudo_angular_velocities_;
     std::vector<RotationComponent> rotations_;
@@ -48,8 +49,8 @@ private:
     std::vector<float> particle_inv_masses_;
     std::vector<float> particle_frictions_;
     std::vector<Vec2> particle_forces_;
-    std::vector<std::pair<size_t, size_t>> surface_edges_;
-    std::vector<size_t> surface_particles_idx_;
+    std::vector<std::pair<uint32_t, uint32_t>> surface_edges_;
+    std::vector<uint32_t> surface_particles_idx_;
     std::vector<XpbdDistanceConstraint> distance_constraints_;
     std::vector<XpbdContactConstraint> soft_rigid_contacts_;
     std::vector<XpbdTriangleAreaConstraint> triangle_area_constraints_;
@@ -67,21 +68,21 @@ public:
     BodyHandle CreateCircle(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float radius, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreateBox(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float half_width, float half_height, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreatePolygon(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, const std::vector<Vec2>& vertices, float restitution = 0.1f, float friction = 0.1f);
-    static size_t AddParticle(PhysicsWorld& world, const Vec2& pos, float inv_mass, float friction);
-    static size_t AddDistanceConstraint(PhysicsWorld& world, size_t p1, size_t p2, float compliance);
-    static size_t AddTriangleAreaConstraint(PhysicsWorld& world, size_t p1, size_t p2, size_t p3, float compliance);
-    static size_t AddGlobalAreaConstraint(PhysicsWorld& world, size_t start_particle_idx, size_t particle_count, float compliance);
-    SoftBodyHandle CreateRope(const Vec2& start, const Vec2& end, size_t segments, float mass, float friction, float compliance = 0.0f, bool fix_start = true, bool fix_end = false);
-    SoftBodyHandle CreateSoftBox(const Vec2& pos, float width, float height, size_t res_x, size_t res_y, float mass, float friction, float compliance);
-    SoftBodyHandle CreateSoftCircle(const Vec2& pos, float radius, size_t segments, float mass, float friction, float compliance);
-    SoftBodyHandle CreatePressureSoftCircle(const Vec2& pos, float radius, size_t segments, float mass, float friction, float compliance);
+    static uint32_t AddParticle(PhysicsWorld& world, const Vec2& pos, float inv_mass, float friction);
+    static uint32_t AddDistanceConstraint(PhysicsWorld& world, uint32_t p1, uint32_t p2, float compliance);
+    static uint32_t AddTriangleAreaConstraint(PhysicsWorld& world, uint32_t p1, uint32_t p2, uint32_t p3, float compliance);
+    static uint32_t AddGlobalAreaConstraint(PhysicsWorld& world, uint32_t start_particle_idx, uint16_t particle_count, float compliance);
+    SoftBodyHandle CreateRope(const Vec2& start, const Vec2& end, uint16_t segments, float mass, float friction, float compliance = 0.0f, bool fix_start = true, bool fix_end = false);
+    SoftBodyHandle CreateSoftBox(const Vec2& pos, float width, float height, uint16_t res_x, uint16_t res_y, float mass, float friction, float compliance);
+    SoftBodyHandle CreateSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
+    SoftBodyHandle CreatePressureSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
     
     void ApplyForce(BodyHandle handle, const Vec2& force);
     void ApplyForceToAll(const Vec2& force);
     void ApplyGravity();
     void Step(float dt);
     
-    std::span<Vec2> GetSoftBodyParticlePositions(size_t i);
+    std::span<Vec2> GetSoftBodyParticlePositions(uint32_t i);
     const std::vector<PositionComponent>& GetPositions() { return positions_; }
     const std::vector<RotationComponent>& GetRotations() { return rotations_; }
     const std::vector<Shape>& GetShapes() { return shapes_; }
@@ -91,7 +92,7 @@ public:
     const std::vector<Vec2>& GetParticlePositions() { return particle_positions_; }
     const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
     const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
-    const std::vector<size_t>& GetSurfaceParticlesIdx() { return surface_particles_idx_; }
+    const std::vector<uint32_t>& GetSurfaceParticlesIdx() { return surface_particles_idx_; }
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }
     void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id].val = angular_vel; }
@@ -100,7 +101,7 @@ public:
     
     float gravity_;
     std::vector<BvhNode> bvh_tree_nodes_;
-    size_t bvh_tree_root_index_{std::numeric_limits<size_t>::max()};
+    uint32_t bvh_tree_root_index_{std::numeric_limits<uint32_t>::max()};
     std::vector<Manifold> manifolds_;
     
     bool show_debug_contact_points_ = true;

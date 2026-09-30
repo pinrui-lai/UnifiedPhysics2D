@@ -19,32 +19,32 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     
     // ===== Broad-Phase =====
     auto start = Clock::now();
-    const size_t rigid_count = world.positions_.size();
-    const size_t soft_count = world.soft_body_handles_.size();
-    const size_t total_count = rigid_count + soft_count;
+    const uint32_t rigid_count = world.positions_.size();
+    const uint32_t soft_count = world.soft_body_handles_.size();
+    const uint32_t total_count = rigid_count + soft_count;
     if (total_count == 0) return;
     
     std::pmr::vector<Aabb> world_aabbs(&world.frame_arena_);
     world_aabbs.reserve(total_count);
     
-    std::pmr::vector<std::pair<size_t, size_t>> rigid_particle_contacts(&world.frame_arena_);
+    std::pmr::vector<std::pair<uint32_t, uint32_t>> rigid_particle_contacts(&world.frame_arena_);
     rigid_particle_contacts.reserve(100);
     
-    std::pmr::vector<std::pair<size_t, size_t>> soft_soft_contacts(&world.frame_arena_);
+    std::pmr::vector<std::pair<uint32_t, uint32_t>> soft_soft_contacts(&world.frame_arena_);
     soft_soft_contacts.reserve(100);
     
     BuildBvh(world, world_aabbs);
     
     // Query rigid bodies for rigid-rigid and rigid-soft contact.
-    for (size_t i = 0; i < rigid_count; ++i)
+    for (uint32_t i = 0; i < rigid_count; ++i)
     {
         QueryBvh(world, world_aabbs, i, rigid_particle_contacts, soft_soft_contacts);
     }
     
     // Query soft bodies for soft-soft contact.
-    for (size_t i = 0; i < soft_count; ++i)
+    for (uint32_t i = 0; i < soft_count; ++i)
     {
-        const size_t idx = rigid_count + i;
+        const uint32_t idx = rigid_count + i;
         QueryBvh(world, world_aabbs, idx, rigid_particle_contacts, soft_soft_contacts);
     }
     
@@ -73,21 +73,21 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     // Rigid vs Rigid (GJK + EPA + Clipping).
     for (auto& manifold : world.manifolds_)
     {
-        if (world.rigid_bodies_[manifold.a].mass == 0.0f && world.rigid_bodies_[manifold.b].mass == 0.0f) continue;
+        if (world.rigid_bodies_[manifold.a].inv_mass == 0.0f && world.rigid_bodies_[manifold.b].inv_mass == 0.0f) continue;
         
         // Store old contacts and contact_count from the previous frame.
         std::array<Contact, 2> old_contacts = manifold.contacts;
-        const size_t old_contact_count = manifold.contact_count;
+        const uint8_t old_contact_count = manifold.contact_count;
         
         // Write new contacts of the current frame in manifold.
         Gjk(world, manifold);
         
         // Match Feature ID and inherit old impulse.
-        for (size_t i = 0; i < manifold.contact_count; ++i)
+        for (uint8_t i = 0; i < manifold.contact_count; ++i)
         {
             Contact& new_c = manifold.contacts[i];
         
-            for (size_t j = 0; j < old_contact_count; ++j)
+            for (uint8_t j = 0; j < old_contact_count; ++j)
             {
                 const Contact& old_c = old_contacts[j];
                 // ID matching successful, inheriting the old impulse.
@@ -105,8 +105,8 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
 
 void CollisionDetectionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
 {
-    const size_t index_a = manifold.a;
-    const size_t index_b = manifold.b;
+    const uint32_t index_a = manifold.a;
+    const uint32_t index_b = manifold.b;
     
     const Vec2 position_a = world.positions_[index_a].val;
     const Vec2 position_b = world.positions_[index_b].val;
@@ -201,7 +201,7 @@ namespace
     template<class... Ts> struct Overload : Ts... { using Ts::operator()...; };    
 }
 
-Vec2 CollisionDetectionSystem::GetSupport(const PhysicsWorld& world, const size_t i, const Vec2 dir)
+Vec2 CollisionDetectionSystem::GetSupport(const PhysicsWorld& world, const uint32_t i, const Vec2 dir)
 {
     const Shape& s = world.shapes_[i];
     return std::visit(Overload{
@@ -232,7 +232,7 @@ Vec2 CollisionDetectionSystem::GetSupport(const PhysicsWorld& world, const size_
 std::pair<Vec2, float> CollisionDetectionSystem::Epa(const PhysicsWorld& world, const FixedSimplex& simplex, const Manifold& manifold)
 {
     FixedPolytope polytope;
-    for (size_t i = 0; i < simplex.size(); ++i)
+    for (uint8_t i = 0; i < simplex.size(); ++i)
     {
         polytope.push_back(simplex[i]);
     }
@@ -249,12 +249,12 @@ std::pair<Vec2, float> CollisionDetectionSystem::Epa(const PhysicsWorld& world, 
     {
         float min_distance = std::numeric_limits<float>::max();
         Vec2 min_normal;
-        size_t min_insert_index = 0;
+        uint8_t min_insert_index = 0;
         
         // Find edge nearest to origin.
-        for (size_t j = 0; j < polytope.size(); ++j)
+        for (uint8_t j = 0; j < polytope.size(); ++j)
         {
-            const size_t k = (j + 1) % polytope.size();
+            const uint8_t k = (j + 1) % polytope.size();
             Vec2 vertex_a = polytope[j];
             Vec2 vertex_b = polytope[k];
             
@@ -292,8 +292,8 @@ std::pair<Vec2, float> CollisionDetectionSystem::Epa(const PhysicsWorld& world, 
 
 void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 collision_normal, const float depth, Manifold& manifold)
 {
-    size_t index_a = manifold.a;
-    size_t index_b = manifold.b;
+    uint32_t index_a = manifold.a;
+    uint32_t index_b = manifold.b;
     
     Shape shape_a = world.shapes_[index_a];
     Shape shape_b = world.shapes_[index_b];
@@ -324,7 +324,7 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
             contact1.id.features.index_a = 0;
             
             std::array<Vec2, 2> edge_pos_b;
-            std::array<size_t, 2> edge_ids_b;
+            std::array<uint32_t, 2> edge_ids_b;
             float edge_b_dot_normal;
             GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
             
@@ -339,7 +339,7 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
             contact1.id.features.index_b = 0;
             
             std::array<Vec2, 2> edge_pos_a;
-            std::array<size_t, 2> edge_ids_a;
+            std::array<uint32_t, 2> edge_ids_a;
             float edge_a_dot_normal;
             GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
             
@@ -350,20 +350,20 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
         {
             // Decide incident edge and reference edge.
             std::array<Vec2, 2> edge_pos_a;
-            std::array<size_t, 2> edge_ids_a;
+            std::array<uint32_t, 2> edge_ids_a;
             float edge_a_dot_normal;
             GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
             
             std::array<Vec2, 2> edge_pos_b;
-            std::array<size_t, 2> edge_ids_b;
+            std::array<uint32_t, 2> edge_ids_b;
             float edge_b_dot_normal;
             GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
             
             const bool is_ref_a = edge_a_dot_normal > edge_b_dot_normal;
             const std::array<Vec2, 2> ref_edge_pos = edge_a_dot_normal > edge_b_dot_normal ? edge_pos_a : edge_pos_b;
             const std::array<Vec2, 2> inc_edge_pos = edge_a_dot_normal > edge_b_dot_normal ? edge_pos_b : edge_pos_a;
-            const std::array<size_t, 2> ref_edge_ids = edge_a_dot_normal > edge_b_dot_normal ? edge_ids_a : edge_ids_b;
-            const std::array<size_t, 2> inc_edge_ids = edge_a_dot_normal > edge_b_dot_normal ? edge_ids_b : edge_ids_a;
+            const std::array<uint32_t, 2> ref_edge_ids = edge_a_dot_normal > edge_b_dot_normal ? edge_ids_a : edge_ids_b;
+            const std::array<uint32_t, 2> inc_edge_ids = edge_a_dot_normal > edge_b_dot_normal ? edge_ids_b : edge_ids_a;
             
             if (world.show_debug_clipping_)
             {
@@ -402,7 +402,7 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
                 secondary_pt = point + ref_a_to_b_normal * target_contact.depth;
             };
             
-            auto assign_feature_id = [&](Contact& target_contact, const size_t inc_edge_ids_idx) {
+            auto assign_feature_id = [&](Contact& target_contact, const uint32_t inc_edge_ids_idx) {
                 uint8_t& inc_index = is_ref_a ? target_contact.id.features.index_b : contact1.id.features.index_a;
                 uint8_t& inc_type = is_ref_a ? target_contact.id.features.type_b : contact1.id.features.type_a;
                 uint8_t& ref_index = is_ref_a ? target_contact.id.features.index_a : contact1.id.features.index_b;
@@ -438,14 +438,14 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
 }
 
 void CollisionDetectionSystem::GetMostPerpEdge(const std::span<const Vec2>& vertices, Vec2 dir, std::array<Vec2, 2>& out_edge_pos,
-    float& out_dot, std::array<size_t, 2>& out_edge_ids)
+    float& out_dot, std::array<uint32_t, 2>& out_edge_ids)
 {
     float max_dot = std::numeric_limits<float>::lowest();
     std::array<Vec2, 2> max_edge_pos;
-    std::array<size_t, 2> max_edge_ids;
-    for (size_t i = 0; i < vertices.size(); ++i)
+    std::array<uint32_t, 2> max_edge_ids;
+    for (uint32_t i = 0; i < vertices.size(); ++i)
     {
-        const size_t j = (i + 1) % vertices.size();
+        const uint32_t j = (i + 1) % vertices.size();
         Vec2 ij = vertices[j] - vertices[i];
         Vec2 ij_normal = ij.Normal();
         if (const float current_dot = ij_normal.Dot(dir); current_dot > max_dot)
@@ -462,7 +462,7 @@ void CollisionDetectionSystem::GetMostPerpEdge(const std::span<const Vec2>& vert
 }
 
 void CollisionDetectionSystem::ClipEdge(const Vec2 clip_face_inner_normal, const Vec2 point_on_clip_face,
-    const size_t clip_face_id, std::array<Vec2, 2>& out_clipped_edges, std::array<int, 2>& out_clip_face_ids)
+    const uint32_t clip_face_id, std::array<Vec2, 2>& out_clipped_edges, std::array<int, 2>& out_clip_face_ids)
 {
     // Project Incident Edge's points to 'normal of clip-face (Reference Edge)' (all vector start from one of Reference Edge point).
     const Vec2 ref_a_to_inc_a = out_clipped_edges[0] - point_on_clip_face;
@@ -492,7 +492,7 @@ void CollisionDetectionSystem::ClipEdge(const Vec2 clip_face_inner_normal, const
     }
 }
 
-std::array<Vec2, 4> CollisionDetectionSystem::GetVertices(const PhysicsWorld& world, const BoxShape& box_shape, size_t i)
+std::array<Vec2, 4> CollisionDetectionSystem::GetVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i)
 {
     // Make sure vertices are arranged in clockwise.
     std::array<Vec2, 4> vertices;
@@ -508,7 +508,7 @@ std::array<Vec2, 4> CollisionDetectionSystem::GetVertices(const PhysicsWorld& wo
 }
 
 std::span<const Vec2> CollisionDetectionSystem::GetVertices(PhysicsWorld& world, const PolygonShape& polygon_shape,
-    size_t i)
+    uint32_t i)
 {
     std::span<Vec2> local_vertices = std::span(world.vertices_).subspan(polygon_shape.vertex_offset, polygon_shape.vertex_count);
     
@@ -570,8 +570,8 @@ uint32_t CollisionDetectionSystem::GetMortonCode(const Vec2& pos, const float mi
 
 void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_aabbs)
 {
-    const size_t rigid_count = world.positions_.size();
-    const size_t soft_count = world.soft_body_handles_.size();
+    const uint32_t rigid_count = world.positions_.size();
+    const uint32_t soft_count = world.soft_body_handles_.size();
     
     world.bvh_tree_nodes_.clear();
     
@@ -598,7 +598,7 @@ void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aa
     }
     
     // XPBD Soft Body world AABBs.
-    for (size_t i = 0; i < soft_count; ++i)
+    for (uint32_t i = 0; i < soft_count; ++i)
     {
         float min_x = std::numeric_limits<float>::max();
         float min_y = std::numeric_limits<float>::max();
@@ -626,13 +626,13 @@ void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aa
     std::pmr::vector<Item> items(&world.frame_arena_);
     items.reserve(world_aabbs.size());
     
-    for (size_t i = 0; i < rigid_count; ++i)
+    for (uint32_t i = 0; i < rigid_count; ++i)
     {
         items.emplace_back(i, GetMortonCode(world.positions_[i].val, scene_aabb.min_x, scene_aabb.min_y, scene_aabb.max_x, scene_aabb.max_y));
     }
-    for (size_t i = 0; i < soft_count; ++i)
+    for (uint32_t i = 0; i < soft_count; ++i)
     {
-        const size_t unified_idx = rigid_count + i;
+        const uint32_t unified_idx = rigid_count + i;
         auto& [min_x, min_y, max_x, max_y] = world_aabbs[unified_idx];
         auto center = Vec2{(max_x - min_x) * 0.5f, (max_y - min_y) * 0.5f};
         items.emplace_back(unified_idx, GetMortonCode(center, scene_aabb.min_x, scene_aabb.min_y, scene_aabb.max_x, scene_aabb.max_y));
@@ -644,19 +644,19 @@ void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aa
     world.bvh_tree_root_index_ = BuildBvhRecursive(world, items, world_aabbs, 0, items.size());
 }
 
-void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, size_t query_obj_idx,
-    std::pmr::vector<std::pair<size_t, size_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<size_t, size_t>>& soft_soft_contacts)
+void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, uint32_t query_obj_idx,
+    std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts)
 {
-    if (world.bvh_tree_root_index_ == std::numeric_limits<size_t>::max()) return;
+    if (world.bvh_tree_root_index_ == std::numeric_limits<uint32_t>::max()) return;
     
-    const size_t rigid_count = world.positions_.size();
+    const uint32_t rigid_count = world.positions_.size();
     
-    std::pmr::vector<size_t> stack(&world.frame_arena_);
+    std::pmr::vector<uint32_t> stack(&world.frame_arena_);
     stack.reserve(64);
     stack.push_back(world.bvh_tree_root_index_);
 
     while (!stack.empty()) {
-        const size_t curr = stack.back();
+        const uint32_t curr = stack.back();
         stack.pop_back();
 
         if (const BvhNode& node = world.bvh_tree_nodes_[curr]; Aabb::Overlap(node.aabb, world_aabbs[query_obj_idx])) 
@@ -664,7 +664,7 @@ void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vec
             if (node.IsLeaf()) 
             {
                 // Rigid vs Rigid
-                if (const size_t leaf_id = node.leaf_id; leaf_id < rigid_count)
+                if (const uint32_t leaf_id = node.leaf_id; leaf_id < rigid_count)
                 {
                     if (node.leaf_id == query_obj_idx || query_obj_idx >= rigid_count) continue;
                 
@@ -685,13 +685,13 @@ void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vec
                 }
                 else
                 {
-                    const size_t soft_idx = leaf_id - rigid_count;
+                    const uint32_t soft_idx = leaf_id - rigid_count;
                     
                     // Rigid vs Soft (Particle)
                     if (query_obj_idx < rigid_count)
                     {
                         const auto& soft_handle = world.soft_body_handles_[soft_idx];
-                        for (size_t i = soft_handle.start_surface_particle_idx; i < soft_handle.start_surface_particle_idx + soft_handle.surface_particle_count; ++i)
+                        for (uint32_t i = soft_handle.start_surface_particle_idx; i < soft_handle.start_surface_particle_idx + soft_handle.surface_particle_count; ++i)
                         {
                             const auto particle_idx = world.surface_particles_idx_[i]; // Only detect surface particle of soft body
                             rigid_soft_contacts.emplace_back(query_obj_idx, particle_idx);
@@ -700,7 +700,7 @@ void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vec
                     // Soft vs Soft
                     else
                     {
-                        const size_t query_soft_idx = query_obj_idx - rigid_count;
+                        const uint32_t query_soft_idx = query_obj_idx - rigid_count;
                         if (query_soft_idx == soft_idx) continue;
                         
                         soft_soft_contacts.emplace_back(query_soft_idx, soft_idx);
@@ -716,10 +716,10 @@ void CollisionDetectionSystem::QueryBvh(PhysicsWorld& world, const std::pmr::vec
     }
 }
 
-size_t CollisionDetectionSystem::BuildBvhRecursive(PhysicsWorld& world, std::pmr::vector<Item>& items, const std::pmr::vector<Aabb>& world_aabbs, const size_t start, const size_t end)
+uint32_t CollisionDetectionSystem::BuildBvhRecursive(PhysicsWorld& world, std::pmr::vector<Item>& items, const std::pmr::vector<Aabb>& world_aabbs, const int start, const int end)
 {
     // Index of current node.
-    const size_t node_index = world.bvh_tree_nodes_.size();
+    const uint32_t node_index = world.bvh_tree_nodes_.size();
     
     // Place a placeholder in bvh_tree_nodes_.
     world.bvh_tree_nodes_.emplace_back();
@@ -737,8 +737,8 @@ size_t CollisionDetectionSystem::BuildBvhRecursive(PhysicsWorld& world, std::pmr
     // Find the median and divide in half.
     const int mid = start + count / 2;
     
-    const size_t left_node_index = BuildBvhRecursive(world, items, world_aabbs, start, mid);
-    const size_t right_node_index = BuildBvhRecursive(world, items, world_aabbs, mid, end);
+    const uint32_t left_node_index = BuildBvhRecursive(world, items, world_aabbs, start, mid);
+    const uint32_t right_node_index = BuildBvhRecursive(world, items, world_aabbs, mid, end);
     
     world.bvh_tree_nodes_[node_index].aabb = Aabb::Combine(world.bvh_tree_nodes_[left_node_index].aabb, world.bvh_tree_nodes_[right_node_index].aabb);
     world.bvh_tree_nodes_[node_index].left_child = left_node_index;
@@ -747,7 +747,7 @@ size_t CollisionDetectionSystem::BuildBvhRecursive(PhysicsWorld& world, std::pmr
     return node_index;
 }
 
-void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, const size_t query_obj_idx, const size_t particle_idx)
+void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, const uint32_t query_obj_idx, const uint32_t particle_idx)
 {
     Shape& shape = world.shapes_[query_obj_idx];
     std::visit(Overload{
@@ -785,12 +785,12 @@ void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, 
 
 void CollisionDetectionSystem::CheckParticleEdgeCollision(PhysicsWorld& world, const float total_thickness, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b)
 {
-    for (size_t i = soft_body_a.start_surface_particle_idx; i < soft_body_a.start_surface_particle_idx + soft_body_a.surface_particle_count; ++i) 
+    for (uint32_t i = soft_body_a.start_surface_particle_idx; i < soft_body_a.start_surface_particle_idx + soft_body_a.surface_particle_count; ++i) 
     {
         const auto particle_idx = world.surface_particles_idx_[i]; // Only detect surface particles.
         const Vec2& particle_pos = world.particle_positions_[particle_idx];
         
-        for (size_t j = 0; j < soft_body_b.edge_count; ++j)
+        for (uint16_t j = 0; j < soft_body_b.edge_count; ++j)
         {
             const auto edge_idx = soft_body_b.start_edge_idx + j;
             const auto& edge = world.surface_edges_[edge_idx];
@@ -819,7 +819,7 @@ void CollisionDetectionSystem::CheckParticleEdgeCollision(PhysicsWorld& world, c
     }
 }
 
-void CollisionDetectionSystem::CheckSoftSoftCollision(PhysicsWorld& world, const size_t soft_idx1, const size_t soft_idx2)
+void CollisionDetectionSystem::CheckSoftSoftCollision(PhysicsWorld& world, const uint32_t soft_idx1, const uint32_t soft_idx2)
 {
     CheckParticleEdgeCollision(world, physics_config::kTwoParticlesThickness, world.soft_body_handles_[soft_idx1], world.soft_body_handles_[soft_idx2]);
     CheckParticleEdgeCollision(world, physics_config::kTwoParticlesThickness, world.soft_body_handles_[soft_idx2], world.soft_body_handles_[soft_idx1]);
