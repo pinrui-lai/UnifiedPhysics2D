@@ -13,16 +13,44 @@ class CollisionDetectionSystem;
 class MovementSystem;
 
 struct PhysicsProfileData {
+    double integrate_rigid_vel = 0.0;
+    double predict_particle_pos = 0.0;
+    
     double broad_phase_ms = 0.0;
+    double build_bvh_ms = 0.0;
+    double query_bvh_ms = 0.0;
+    double erase_manifold_ms = 0.0;
+    
     double narrow_phase_ms = 0.0;
+    double rigid_rigid_ms = 0.0;
+    double rigid_soft_ms = 0.0;
+    double soft_soft_ms = 0.0;
+    
     double solve_xpbd_constraints_ms = 0.0;
     double solve_si_constraints_ms = 0.0;
+    
+    double integrate_rigid_pos = 0.0;
+    double update_particle_vel = 0.0;
 
     void Reset() {
+        integrate_rigid_vel = 0.0;
+        predict_particle_pos = 0.0;
+        
         broad_phase_ms = 0.0;
+        build_bvh_ms = 0.0;
+        query_bvh_ms = 0.0;
+        erase_manifold_ms = 0.0;
+        
         narrow_phase_ms = 0.0;
+        rigid_rigid_ms = 0.0;
+        rigid_soft_ms = 0.0;
+        soft_soft_ms = 0.0;
+        
         solve_xpbd_constraints_ms = 0.0;
         solve_si_constraints_ms = 0.0;
+        
+        integrate_rigid_pos = 0.0;
+        update_particle_vel = 0.0;
     }
 };
 
@@ -53,10 +81,10 @@ private:
     std::vector<std::pair<uint32_t, uint32_t>> surface_edges_;
     std::vector<uint32_t> surface_particles_idx_;
     std::vector<XpbdDistanceConstraint> distance_constraints_;
-    std::vector<XpbdContactConstraint> soft_rigid_contacts_;
     std::vector<XpbdTriangleAreaConstraint> triangle_area_constraints_;
     std::vector<XpbdGlobalAreaConstraint> global_area_constraints_;
-    std::vector<XpbdParticleEdgeCollisionConstraint> particle_edge_collision_constraints_;
+    std::vector<XpbdContactConstraint> particle_rigid_contacts_;
+    std::vector<XpbdParticleEdgeCollisionConstraint> particle_edge_contacts_;
     
     std::pmr::monotonic_buffer_resource frame_arena_;
     
@@ -85,7 +113,6 @@ public:
     
     std::span<Vec2> GetSoftBodyParticlePositions(uint32_t i);
     const std::vector<PositionComponent>& GetPositions() { return positions_; }
-    const std::vector<RotationComponent>& GetRotations() { return rotations_; }
     const std::vector<Rot>& GetRots() { return rots_; }
     const std::vector<Shape>& GetShapes() { return shapes_; }
     const std::vector<Vec2>& GetVertices() { return vertices_; }
@@ -95,6 +122,8 @@ public:
     const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
     const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
     const std::vector<uint32_t>& GetSurfaceParticlesIdx() { return surface_particles_idx_; }
+    auto GetParticleRigidContactsSize() const { return particle_rigid_contacts_.size(); }
+    auto GetParticleEdgeContactsSize() const { return particle_edge_contacts_.size(); }
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }
     void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id].val = angular_vel; }

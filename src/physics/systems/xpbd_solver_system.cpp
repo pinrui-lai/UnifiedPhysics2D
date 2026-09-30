@@ -154,7 +154,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
 
 void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float sub_dt)
 {
-    for (auto& c : world.soft_rigid_contacts_)
+    for (auto& c : world.particle_rigid_contacts_)
     {
         const float w_particle = world.particle_inv_masses_[c.particle_idx];
         
@@ -215,7 +215,7 @@ void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float sub_
 
 void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
 {
-    for (const auto& c : world.particle_edge_collision_constraints_) {
+    for (const auto& c : world.particle_edge_contacts_) {
         // Compute current penetration.
         Vec2 ab = world.particle_positions_[c.body_b_p2_idx] - world.particle_positions_[c.body_b_p1_idx];
         Vec2 proj = world.particle_positions_[c.body_b_p1_idx] + ab * c.t;

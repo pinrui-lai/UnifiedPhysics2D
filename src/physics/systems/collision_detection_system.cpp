@@ -34,7 +34,9 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     soft_soft_contacts.reserve(100);
     
     BuildBvh(world, world_aabbs);
+    world.profile_data_.build_bvh_ms += Duration(Clock::now() - start).count();
     
+    start = Clock::now();
     // Query rigid bodies for rigid-rigid and rigid-soft contact.
     for (uint32_t i = 0; i < rigid_count; ++i)
     {
@@ -47,30 +49,37 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
         const uint32_t idx = rigid_count + i;
         QueryBvh(world, world_aabbs, idx, rigid_particle_contacts, soft_soft_contacts);
     }
+    world.profile_data_.query_bvh_ms += Duration(Clock::now() - start).count();
     
     // Remove manifold whose AABBs no longer overlap.
+    start = Clock::now();
     std::erase_if(world.manifolds_, [](const Manifold& manifold)
     {
         return manifold.is_overlapping == false;
     });
-    world.profile_data_.broad_phase_ms += Duration(Clock::now() - start).count();
+    world.profile_data_.erase_manifold_ms += Duration(Clock::now() - start).count();
+    world.profile_data_.broad_phase_ms = (world.profile_data_.build_bvh_ms + world.profile_data_.query_bvh_ms + world.profile_data_.erase_manifold_ms);
     
     // ===== Narrow-Phase =====
-    start = Clock::now();
     
     // Rigid vs Soft Particles (SDF).
+    start = Clock::now();
     for (const auto& [fst, snd] : rigid_particle_contacts)
     {
         CheckRigidParticleCollision(world, fst, snd);
     }
+    world.profile_data_.rigid_soft_ms += Duration(Clock::now() - start).count();
     
     // Soft vs Soft.
+    start = Clock::now();
     for (const auto& [fst, snd] : soft_soft_contacts)
     {
         CheckSoftSoftCollision(world, fst, snd);
     }
+    world.profile_data_.soft_soft_ms += Duration(Clock::now() - start).count();
     
     // Rigid vs Rigid (GJK + EPA + Clipping).
+    start = Clock::now();
     for (auto& manifold : world.manifolds_)
     {
         if (world.rigid_bodies_[manifold.a].inv_mass == 0.0f && world.rigid_bodies_[manifold.b].inv_mass == 0.0f) continue;
@@ -100,7 +109,8 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
             }
         }
     }
-    world.profile_data_.narrow_phase_ms += Duration(Clock::now() - start).count();
+    world.profile_data_.rigid_rigid_ms += Duration(Clock::now() - start).count();
+    world.profile_data_.narrow_phase_ms = world.profile_data_.soft_soft_ms + world.profile_data_.rigid_soft_ms + world.profile_data_.rigid_rigid_ms;
 }
 
 void CollisionDetectionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
@@ -758,7 +768,7 @@ void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, 
             Vec2 contact_normal{local_normal.x * c - local_normal.y * s, local_normal.x * s + local_normal.y * c};
             Vec2 contact_point = world.particle_positions_[particle_idx] + contact_normal * -depth;
    
-            world.soft_rigid_contacts_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
+            world.particle_rigid_contacts_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
         },
         [&](const CircleShape& c)
         {
@@ -769,7 +779,7 @@ void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, 
             Vec2 contact_normal = p_pos_map_to_circle.Normalized() ;
             Vec2 contact_point = world.particle_positions_[particle_idx] + contact_normal * -depth;
         
-            world.soft_rigid_contacts_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
+            world.particle_rigid_contacts_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
         },
         [&](const PolygonShape& p){},
     }, shape);
@@ -805,7 +815,7 @@ void CollisionDetectionSystem::CheckParticleEdgeCollision(PhysicsWorld& world, c
             if (const float dist = diff.Length(); dist < total_thickness) 
             {
                 const Vec2 normal = (dist > 1e-6f) ? diff / dist : Vec2{0.0f, 1.0f};
-                world.particle_edge_collision_constraints_.emplace_back(normal, particle_idx, edge.first, edge.second, -(dist - total_thickness), t);
+                world.particle_edge_contacts_.emplace_back(normal, particle_idx, edge.first, edge.second, -(dist - total_thickness), t);
             }
         }
     }

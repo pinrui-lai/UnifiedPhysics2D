@@ -408,17 +408,22 @@ void PhysicsWorld::Step(const float dt)
     for (int sub_step = 0; sub_step < sub_steps; ++sub_step)
     {
         frame_arena_.release();
-        soft_rigid_contacts_.clear();
-        particle_edge_collision_constraints_.clear();
+        particle_rigid_contacts_.clear();
+        particle_edge_contacts_.clear();
         
         ApplyGravity();
         
+        auto start = Clock::now();
         MovementSystem::IntegrateVelocity(*this, sub_dt);
+        profile_data_.integrate_rigid_vel += Duration(Clock::now() - start).count();
+        
+        start = Clock::now();
         XpbdSolver::PredictParticles(*this, sub_dt);
+        profile_data_.predict_particle_pos += Duration(Clock::now() - start).count();
         
         CollisionDetectionSystem::CheckCollision(*this);
 
-        auto start = Clock::now();
+        start = Clock::now();
         for (int iter = 0; iter < xpbd_iterations; ++iter)
         {
             if (iter % 2 == 0) 
@@ -491,8 +496,14 @@ void PhysicsWorld::Step(const float dt)
         }
         profile_data_.solve_si_constraints_ms += Duration(Clock::now() - start).count();
 
+        start = Clock::now();
         MovementSystem::IntegratePosition(*this, sub_dt);
+        profile_data_.integrate_rigid_pos += Duration(Clock::now() - start).count();
+        
+        start = Clock::now();
         XpbdSolver::FinalizeParticles(*this, 1.f/sub_dt);
+        profile_data_.update_particle_vel += Duration(Clock::now() - start).count();
+        
     }
 }
 

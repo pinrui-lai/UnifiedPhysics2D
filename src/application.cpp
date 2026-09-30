@@ -163,7 +163,6 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
 
     const auto& positions = world.GetPositions();
-    const auto& rotations = world.GetRotations();
     const auto& rots = world.GetRots();
     // const auto& vertices = world.GetVertices();
     const auto& shapes = world.GetShapes();
@@ -278,10 +277,28 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
 {
     ImGui::Begin("Physics Engine Control");
 
-    ImGui::Text("FPS: %.1f\nNum Bodies: %d, Num Manifolds: %d",
-        ImGui::GetIO().Framerate, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size());
-    ImGui::Text("Broad-Phase: %.5f ms\nNarrow-Phase: %.5f ms\nSolve XPBD Constraint: %.5f ms\nSolve Sequence Impulse Constraint: %.5f ms",
-        world.profile_data_.broad_phase_ms, world.profile_data_.narrow_phase_ms, world.profile_data_.solve_xpbd_constraints_ms, world.profile_data_.solve_si_constraints_ms);
+    ImGui::Text("FPS: %.1f\nNum Bodies: %d, Num Manifolds: %d\nNum Particle-Rigid Contacts: %d\nNum Particle-Edge Contacts: %d",
+        ImGui::GetIO().Framerate, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size(), world.GetParticleRigidContactsSize(), world.GetParticleEdgeContactsSize());
+    
+    ImGui::Spacing();
+    ImGui::Text("Integrate Rigid Vel: %.5f ms\nPredict Particle Pos: %.5f ms",
+        world.profile_data_.integrate_rigid_vel, world.profile_data_.predict_particle_pos);
+    
+    ImGui::Spacing();
+    ImGui::Text("Broad-Phase: %.5f ms\n  Build Bvh: %.5f ms\n  Query Bvh: %.5f ms\n  Erase Manifolds: %.5f ms",
+        world.profile_data_.broad_phase_ms, world.profile_data_.build_bvh_ms, world.profile_data_.query_bvh_ms, world.profile_data_.erase_manifold_ms);
+    
+    ImGui::Spacing();
+    ImGui::Text("Narrow-Phase: %.5f ms\n  Rigid - Rigid: %.5f ms\n  Rigid - Soft: %.5f ms\n  Soft - Soft: %.5f ms",
+        world.profile_data_.narrow_phase_ms, world.profile_data_.rigid_rigid_ms, world.profile_data_.rigid_soft_ms, world.profile_data_.soft_soft_ms);
+    
+    ImGui::Spacing();
+    ImGui::Text("Solve XPBD Constraint: %.5f ms\nSolve Sequential Impulse Constraint: %.5f ms",
+        world.profile_data_.solve_xpbd_constraints_ms, world.profile_data_.solve_si_constraints_ms);
+    
+    ImGui::Spacing();
+    ImGui::Text("Integrate Rigid Pos: %.5f ms\nUpdate Particle Vel: %.5f ms",
+        world.profile_data_.integrate_rigid_pos, world.profile_data_.update_particle_vel);
     
     constexpr float indent_len{8.f};
     
