@@ -125,11 +125,15 @@ public:
     const std::vector<uint32_t>& GetSurfaceParticlesIdx() { return surface_particles_idx_; }
     auto GetParticleRigidContactsSize() const { return particle_rigid_contacts_.size(); }
     auto GetParticleEdgeContactsSize() const { return particle_edge_contacts_.size(); }
+    static std::array<Vec2, 4> GetBodyVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i);
+    static std::vector<Vec2> GetBodyVertices(const PhysicsWorld& world, const PolygonShape& polygon_shape, uint32_t i);
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }
     void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id].val = angular_vel; }
     void SetRestitution(const BodyHandle handle, const float restitution) { rigid_bodies_[handle.id].restitution = restitution; }
     void SetFriction(const BodyHandle handle, const float friction) { rigid_bodies_[handle.id].friction = friction; }
+    
+    void ResetWorld();
     
     float gravity_;
     std::vector<BvhNode> bvh_tree_nodes_;

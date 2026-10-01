@@ -19,9 +19,10 @@ public:
     void Input(SDL_Window* window, bool &is_running, PhysicsWorld& world);
     static void Update(PhysicsWorld& world, float dt);
     void Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world);
-    void RenderPhysicsControlPanel(PhysicsWorld& world);
+    void RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, int window_width);
     void SpawnBodyAt(PhysicsWorld& world, SpawnType type, Vec2 spawn_pos) const;
     void RenderSpawnTypeConfigUi(SpawnType type);
+    void ResetWorld(SDL_Window* window, PhysicsWorld& world);
     
     static ImU32 GetDepthColor(int depth, float alpha = 1.0f);
     static void DrawBvhNode(ImDrawList* draw_list, const std::vector<BvhNode>& nodes, int node_idx, int current_depth, int max_render_depth, int& hovered_node_idx, float window_height);
@@ -91,14 +92,14 @@ private:
     float soft_box_spawn_compliance_{0.0000000f};
 
     // Soft Circle (Triangle Area)
-    float soft_circle_spawn_radius_{1.5f};
+    float soft_circle_spawn_radius_{1.4f};
     int soft_circle_spawn_num_segments_{20};
     float soft_circle_spawn_mass_{10.f};
     float soft_circle_spawn_friction_{0.5f};
     float soft_circle_spawn_compliance_{0.0000000f};
 
     // Soft Circle (Pressure)
-    float pressure_circle_spawn_radius_{1.5f};
+    float pressure_circle_spawn_radius_{1.4f};
     int pressure_circle_spawn_num_segments_{20};
     float pressure_circle_spawn_mass_{10.f};
     float pressure_circle_spawn_friction_{0.5f};
@@ -108,4 +109,5 @@ private:
     float arrow_key_force_{800.f};
     bool draw_bvh_{false};
     int bvh_draw_max_depth_{5};
+    bool draw_surface_particle_{false};
 };

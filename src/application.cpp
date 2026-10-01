@@ -20,47 +20,47 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
 
     // XPBD soft rope.
     Vec2 rope_start_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f} * physics_config::kMpp;
-    rope_start_pos.x -= 5.f;
+    rope_start_pos.x -= 7.f;
     rope_start_pos.y += 5.f;
-    const Vec2 rope_end_pos{rope_start_pos.x + 10.f, rope_start_pos.y};
+    const Vec2 rope_end_pos{rope_start_pos.x + 9.f, rope_start_pos.y};
     SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.5f, 0.000000f, true, true);
     
     // Floating obstacle Bodies.
-    const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) / 4.f * 3.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) - 700.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_circle_ = world.CreateCircle(floating_circle_pos, 0.0f,
         {0.f, 0.f}, floating_bodies_angular_vel_,
-        0.f, 2.f, floating_bodies_restitution_, floating_bodies_friction_);
+        0.f, 1.75f, floating_bodies_restitution_, floating_bodies_friction_);
     
-    floating_circle2_ = world.CreateCircle({floating_circle_pos.x + 3, floating_circle_pos.y}, 0.0f,
+    floating_circle2_ = world.CreateCircle({floating_circle_pos.x + 2.5f, floating_circle_pos.y}, 0.0f,
         {0.f, 0.f}, floating_bodies_angular_vel_,
-        0.f, 2.f, floating_bodies_restitution_, floating_bodies_friction_);
+        0.f, 1.75f, floating_bodies_restitution_, floating_bodies_friction_);
     
-    const Vec2 floating_wide_box_pos = Vec2{static_cast<float>(w) / 4.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    const Vec2 floating_wide_box_pos = Vec2{400.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     floating_wide_box_1_ = world.CreateBox(floating_wide_box_pos, 0.0f,
         {0.f, 0.f}, floating_bodies_angular_vel_,
-        0.f, 3.5f, 0.4f, floating_bodies_restitution_, floating_bodies_friction_);
+        0.f, 3.2f, 0.3f, floating_bodies_restitution_, floating_bodies_friction_);
     
     floating_wide_box_2_ = world.CreateBox(floating_wide_box_pos, std::numbers::pi / 2,
         {0.f, 0.f}, floating_bodies_angular_vel_,
-        0.f, 3.5f, 0.4f, floating_bodies_restitution_, floating_bodies_friction_);
+        0.f, 3.2f, 0.3f, floating_bodies_restitution_, floating_bodies_friction_);
     
     // Ceil, Floor, Left wall, Right wall.
-    const Vec2 ceil_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) } * physics_config::kMpp;
-    floor_ = world.CreateBox(ceil_pos, 0.f,
+    const Vec2 ceil_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) + 15.f } * physics_config::kMpp;
+    ceil_ = world.CreateBox(ceil_pos, 0.f,
         {0.f, 0.f}, 0.0f,
         0.f, static_cast<float>(w) / 2 * physics_config::kMpp, 1.f, boundary_restitution_, boundary_friction_);
     
-    const Vec2 floor_pos = Vec2{static_cast<float>(w) / 2.f, 50.f } * physics_config::kMpp;
+    const Vec2 floor_pos = Vec2{static_cast<float>(w) / 2.f, 0.f } * physics_config::kMpp;
     floor_ = world.CreateBox(floor_pos, 0.f,
         {0.f, 0.f}, 0.0f,
         0.f, static_cast<float>(w) / 2 * physics_config::kMpp, 1.f, boundary_restitution_, boundary_friction_);
     
-    const Vec2 left_all_pos = Vec2{50, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    const Vec2 left_all_pos = Vec2{10.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     left_wall_ = world.CreateBox(left_all_pos, 0.f,
         {0.f, 0.f}, 0.0f,
         0.f, 1.f, static_cast<float>(h) / 2 * physics_config::kMpp, boundary_restitution_, boundary_friction_);
     
-    const Vec2 right_wall_pos = Vec2{static_cast<float>(w) - 50, static_cast<float>(h) / 2.f } * physics_config::kMpp;
+    const Vec2 right_wall_pos = Vec2{static_cast<float>(w) - 10.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     right_wall_ = world.CreateBox( right_wall_pos, 0.f,
         {0.f, 0.f}, 0.0f,
         0.f, 1.f, static_cast<float>(h) / 2 * physics_config::kMpp, boundary_restitution_, boundary_friction_);
@@ -154,11 +154,11 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     
-    RenderPhysicsControlPanel(world);
-    
     int w, h;
     SDL_GetWindowSize(window, &w, &h);
     const float float_h = static_cast<float>(h);
+    
+    RenderPhysicsControlPanel(window, world, w);
     
     ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
 
@@ -166,6 +166,8 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     const auto& rots = world.GetRots();
     // const auto& vertices = world.GetVertices();
     const auto& shapes = world.GetShapes();
+    const auto& particle_positions = world.GetParticlePositions();
+    const auto& surface_particles_idx = world.GetSurfaceParticlesIdx();
     
     // ==== Rigid Body ====
     for (int i = 0; i < shapes.size(); i++)
@@ -206,7 +208,6 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     }
     
     // ==== Soft Body ====
-    const auto& particle_positions = world.GetParticlePositions();
     for (const auto& particle_position : particle_positions)
     {
         ImVec2 pos{particle_position.x * physics_config::kPpm, float_h - particle_position.y * physics_config::kPpm};
@@ -220,10 +221,13 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         draw_list->AddLine(p0, p1, IM_COL32(255, 0, 0, 255), 2.0f);
     }
     
-    for (const auto& idx : world.GetSurfaceParticlesIdx())
+    if (draw_surface_particle_)
     {
-        ImVec2 pos{particle_positions[idx].x * physics_config::kPpm, float_h - particle_positions[idx].y * physics_config::kPpm};
-        draw_list->AddCircleFilled(pos, 5.0f, IM_COL32(255, 127, 0, 255));
+        for (const auto& idx : surface_particles_idx)
+        {
+            ImVec2 pos{particle_positions[idx].x * physics_config::kPpm, float_h - particle_positions[idx].y * physics_config::kPpm};
+            draw_list->AddCircleFilled(pos, 5.0f, IM_COL32(255, 127, 0, 255));
+        }
     }
     
     // ==== Debug Option ====
@@ -273,8 +277,12 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     SDL_RenderPresent(renderer);
 }
 
-void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
+void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, const int window_width)
 {
+    ImGui::SetNextWindowPos(ImVec2(static_cast<float>(window_width) - 415.f, 10), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(415, 1060), ImGuiCond_Appearing);
+    ImGui::SetNextWindowCollapsed(false, ImGuiCond_Appearing);
+    
     ImGui::Begin("Physics Engine Control");
 
     ImGui::Text("FPS: %.1f\nNum Bodies: %d, Num Manifolds: %d\nNum Particle-Rigid Contacts: %d\nNum Particle-Edge Contacts: %d",
@@ -300,6 +308,10 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
     ImGui::Text("Integrate Rigid Pos: %.5f ms\nUpdate Particle Vel: %.5f ms",
         world.profile_data_.integrate_rigid_pos, world.profile_data_.update_particle_vel);
     
+    ImGui::Separator();
+    if (ImGui::Button("  Reset World  ")){
+        ResetWorld(window, world);
+    }
     constexpr float indent_len{8.f};
     
     // ===== Scene Boundaries =====
@@ -420,6 +432,7 @@ void Application::RenderPhysicsControlPanel(PhysicsWorld& world)
     ImGui::Text("BVH :");
     ImGui::Checkbox("Draw BVH", &draw_bvh_);
     ImGui::SliderInt("BVH Draw Depth", &bvh_draw_max_depth_, 0, 20);
+    ImGui::Checkbox("Draw Surface Particle of Soft Body", &draw_surface_particle_);
     ImGui::Unindent(indent_len);
     
     ImGui::End();
@@ -546,6 +559,12 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.0f, 0.01f, "%.7f");
         break;
     }
+}
+
+void Application::ResetWorld(SDL_Window* window, PhysicsWorld& world)
+{
+    world.ResetWorld();
+    CreateInitialBodies(window, world);
 }
 
 ImU32 Application::GetDepthColor(const int depth, const float alpha)

@@ -322,7 +322,7 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
             std::array<Vec2, 2> edge_pos_b;
             std::array<uint32_t, 2> edge_ids_b;
             float edge_b_dot_normal;
-            GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
+            GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
             
             contact1.id.features.type_b = 1;
             contact1.id.features.index_b = edge_ids_b[0];
@@ -337,7 +337,7 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
             std::array<Vec2, 2> edge_pos_a;
             std::array<uint32_t, 2> edge_ids_a;
             float edge_a_dot_normal;
-            GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
+            GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
             
             contact1.id.features.type_a = 1;
             contact1.id.features.index_a = edge_ids_a[0];
@@ -348,12 +348,12 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
             std::array<Vec2, 2> edge_pos_a;
             std::array<uint32_t, 2> edge_ids_a;
             float edge_a_dot_normal;
-            GetMostPerpEdge(GetVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
+            GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
             
             std::array<Vec2, 2> edge_pos_b;
             std::array<uint32_t, 2> edge_ids_b;
             float edge_b_dot_normal;
-            GetMostPerpEdge(GetVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
+            GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
             
             const bool is_ref_a = edge_a_dot_normal > edge_b_dot_normal;
             const std::array<Vec2, 2> ref_edge_pos = edge_a_dot_normal > edge_b_dot_normal ? edge_pos_a : edge_pos_b;
@@ -488,30 +488,6 @@ void CollisionDetectionSystem::ClipEdge(const Vec2 clip_face_inner_normal, const
     }
 }
 
-std::array<Vec2, 4> CollisionDetectionSystem::GetVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i)
-{
-    // Make sure vertices are arranged in clockwise.
-    std::array<Vec2, 4> vertices;
-    vertices[0] = {-box_shape.half_width, box_shape.half_height};
-    vertices[1] = {box_shape.half_width, box_shape.half_height};
-    vertices[2] = {box_shape.half_width, -box_shape.half_height};
-    vertices[3] = {-box_shape.half_width, -box_shape.half_height};
-    
-    std::ranges::transform(vertices, vertices.begin(), [&](const Vec2 v){ return world.rots_[i].Mul(v) + world.positions_[i].val; });
-    
-    return vertices;
-}
-
-std::span<const Vec2> CollisionDetectionSystem::GetVertices(PhysicsWorld& world, const PolygonShape& polygon_shape,
-    uint32_t i)
-{
-    std::span<Vec2> local_vertices = std::span(world.vertices_).subspan(polygon_shape.vertex_offset, polygon_shape.vertex_count);
-    
-    // TODO : transform to world space.
-    
-    return local_vertices;
-}
-
 Aabb CollisionDetectionSystem::ComputeFastAabbFromLocalAabb(const Vec2& pos, const Rot rot, const Aabb& local_aabb)
 {
     const Vec2 local_aabb_min{local_aabb.min_x, local_aabb.min_y};
@@ -584,7 +560,8 @@ void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aa
             max_y = std::max(max_y, pos.y);
         }
 
-        world_aabbs.emplace_back(min_x - 0.05f, min_y - 0.05f, max_x + 0.05f, max_y + 0.05f);
+        world_aabbs.emplace_back(min_x - physics_config::kTwoParticlesThickness, min_y - physics_config::kTwoParticlesThickness,
+            max_x + physics_config::kTwoParticlesThickness, max_y + physics_config::kTwoParticlesThickness);
     }
     
     // Get Scene Bounding Box (boundary of all bodies in the world).
@@ -592,8 +569,8 @@ void CollisionDetectionSystem::BuildBvh(PhysicsWorld& world, std::pmr::vector<Aa
     for (const auto& world_aabb : world_aabbs) {
         scene_aabb = Aabb::Combine(scene_aabb, world_aabb);
     }
-    float inv_scene_aabb_width = 1 / (scene_aabb.max_x - scene_aabb.min_x);
-    float inv_scene_aabb_height = 1 / (scene_aabb.max_y - scene_aabb.min_y);
+    const float inv_scene_aabb_width = 1 / (scene_aabb.max_x - scene_aabb.min_x);
+    const float inv_scene_aabb_height = 1 / (scene_aabb.max_y - scene_aabb.min_y);
     
     // Get Morton Code and create sort item.
     std::pmr::vector<Item> items(&world.frame_arena_);

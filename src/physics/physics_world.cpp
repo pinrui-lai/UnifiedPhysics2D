@@ -116,7 +116,7 @@ uint32_t PhysicsWorld::AddGlobalAreaConstraint(PhysicsWorld& world, uint32_t sta
 }
 
 SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, const uint16_t segments, const float mass,
-    const float friction, const float compliance, const bool fix_start, const bool fix_end)
+                                        const float friction, const float compliance, const bool fix_start, const bool fix_end)
 {
     if (segments == 0) return {};
 
@@ -205,54 +205,15 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
             const uint32_t p11 = get_idx(x + 1, y + 1);
 
             // Structural Springs
-            if (y == 0)
-            {
+            if (y == 0){
                 AddDistanceConstraint(*this, p00, p10, compliance);
-                surface_edges_.emplace_back(p00, p10);
-                
-                // Surface points
-                if (seen.insert(p00).second) {
-                    surface_particles_idx_.push_back(p00);
-                }
-                if (seen.insert(p10).second) {
-                    surface_particles_idx_.push_back(p10);
-                }
             }
-            if (x == 0)
-            {
+            if (x == 0){
                 AddDistanceConstraint(*this, p00, p01, compliance);
-                surface_edges_.emplace_back(p00, p01);
-                if (seen.insert(p00).second) {
-                    surface_particles_idx_.push_back(p00);
-                }
-                if (seen.insert(p01).second) {
-                    surface_particles_idx_.push_back(p01);
-                }
             } 
                 
             AddDistanceConstraint(*this, p10, p11, compliance);
             AddDistanceConstraint(*this, p01, p11, compliance);
-            
-            if (y == res_y - 2)
-            {
-                surface_edges_.emplace_back(p01, p11);
-                if (seen.insert(p01).second) {
-                    surface_particles_idx_.push_back(p01);
-                }
-                if (seen.insert(p11).second) {
-                    surface_particles_idx_.push_back(p11);
-                }
-            }
-            if (x == res_x - 2)
-            {
-                surface_edges_.emplace_back(p10, p11);
-                if (seen.insert(p10).second) {
-                    surface_particles_idx_.push_back(p10);
-                }
-                if (seen.insert(p11).second) {
-                    surface_particles_idx_.push_back(p11);
-                }
-            }
 
             // Triangle Area Constraints
             // Each Quad is split into two triangles: (p00, p11, p10) and (p00, p01, p11).
@@ -262,12 +223,48 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
         }
     }
     
+    // Surface Particles (Clockwise Order)
+    // Top Row
+    for (uint16_t x = 0; x < res_x; ++x) {
+        surface_particles_idx_.push_back(get_idx(x, res_y - 1));
+    }
+    // Right Column
+    for (int32_t y = res_y - 2; y >= 0; --y) {
+        surface_particles_idx_.push_back(get_idx(res_x - 1, y));
+    }
+    // Bottom Row
+    for (int32_t x = res_x - 2; x >= 0; --x) {
+        surface_particles_idx_.push_back(get_idx(x, 0));
+    }
+    // Left Column: (0, 0) -> (0, res_y-1)
+    for (uint16_t y = 1; y < res_y - 1; ++y) {
+        surface_particles_idx_.push_back(get_idx(0, y));
+    }
+
+    // Surface Edges
+    // Top Edges
+    for (uint16_t x = 0; x < res_x - 1; ++x) {
+        surface_edges_.emplace_back(get_idx(x, res_y - 1), get_idx(x + 1, res_y - 1));
+    }
+    // Right Edges
+    for (int32_t y = res_y - 1; y > 0; --y) {
+        surface_edges_.emplace_back(get_idx(res_x - 1, y), get_idx(res_x - 1, y - 1));
+    }
+    // Bottom Edges
+    for (int32_t x = res_x - 1; x > 0; --x) {
+        surface_edges_.emplace_back(get_idx(x, 0), get_idx(x - 1, 0));
+    }
+    // Left Edges
+    for (uint16_t y = 0; y < res_y - 1; ++y) {
+        surface_edges_.emplace_back(get_idx(0, y), get_idx(0, y + 1));
+    }
+    
     soft_body_handles_.push_back(handle);
     return handle;
 }
 
 SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radius, const uint16_t segments, const float mass,
-    const float friction, const float compliance)
+                                              const float friction, const float compliance)
 {
     if (segments < 3) return {};
 
@@ -398,11 +395,11 @@ void PhysicsWorld::Step(const float dt)
     using Duration = std::chrono::duration<double, std::milli>;
     profile_data_.Reset();
     
-    constexpr int sub_steps = 3;
+    constexpr int sub_steps = 4;
     const float sub_dt = dt / static_cast<float>(sub_steps);
     const float inv_sdt_sq = 1 / (sub_dt * sub_dt);
-    constexpr int velocity_iterations = 3;
-    constexpr int position_iterations = 3;
+    constexpr int velocity_iterations = 2;
+    constexpr int position_iterations = 2;
     constexpr int xpbd_iterations = 2;
     
     for (int sub_step = 0; sub_step < sub_steps; ++sub_step)
@@ -511,4 +508,54 @@ std::span<Vec2> PhysicsWorld::GetSoftBodyParticlePositions(const uint32_t i)
 {
     const SoftBodyHandle& soft_body_handle = soft_body_handles_[i];
     return std::span(particle_positions_).subspan(soft_body_handle.start_particle_idx, soft_body_handle.particle_count);
+}
+
+std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i)
+{
+    // Vertices are arranged in clockwise.
+    std::array<Vec2, 4> vertices = {
+        Vec2{-box_shape.half_width, box_shape.half_height}, Vec2{box_shape.half_width, box_shape.half_height},
+        Vec2{box_shape.half_width, -box_shape.half_height}, Vec2{-box_shape.half_width, -box_shape.half_height}
+    };
+    
+    std::ranges::transform(vertices, vertices.begin(), [&](const Vec2 v){ return world.rots_[i].Mul(v) + world.positions_[i].val; });
+    
+    return vertices;
+}
+
+std::vector<Vec2> PhysicsWorld::GetBodyVertices(const PhysicsWorld& world, const PolygonShape& polygon_shape, uint32_t i)
+{
+    return std::vector<Vec2>{};
+}
+
+void PhysicsWorld::ResetWorld()
+{
+    rigid_bodies_.clear();
+    forces_.clear();
+    positions_.clear();
+    rotations_.clear();
+    rots_.clear();
+    velocities_.clear();
+    angular_velocities_.clear();
+    pseudo_velocities_.clear();
+    pseudo_angular_velocities_.clear();
+    shapes_.clear();
+    vertices_.clear();
+    local_aabbs_.clear();
+    soft_body_handles_.clear();
+    particle_positions_.clear();
+    particle_prev_positions_.clear();
+    particle_velocities_.clear();
+    particle_inv_masses_.clear();
+    particle_frictions_.clear();
+    particle_forces_.clear();
+    surface_edges_.clear();
+    surface_particles_idx_.clear();
+    distance_constraints_.clear();
+    triangle_area_constraints_.clear();
+    global_area_constraints_.clear();
+    bvh_tree_root_index_ = std::numeric_limits<uint32_t>::max();
+    bvh_tree_nodes_.clear();
+    manifolds_.clear();
+    manifold_map_.clear();
 }

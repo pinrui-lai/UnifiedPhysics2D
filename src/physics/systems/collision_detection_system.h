@@ -23,8 +23,6 @@ private:
     static void GetCollisionPoints(PhysicsWorld& world, Vec2 collision_normal, float depth, Manifold& manifold);
     static void GetMostPerpEdge(const std::span<const Vec2>& vertices, Vec2 dir, std::array<Vec2, 2>& out_edge_pos, float& out_dot, std::array<uint32_t, 2>& out_edge_ids);
     static void ClipEdge(Vec2 clip_face_inner_normal, Vec2 point_on_clip_face, uint32_t clip_face_ids, std::array<Vec2, 2>& out_clipped_edges, std::array<int, 2>& out_clip_face_ids);
-    static std::array<Vec2, 4> GetVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i);
-    static std::span<const Vec2> GetVertices(PhysicsWorld& world, const PolygonShape& polygon_shape, uint32_t i);
     
     // (A X B) X C = B(A dot C) - A(B dot C)
     static Vec2 TripleProduct(const Vec2& a, const Vec2& b, const Vec2& c) {return b * a.Dot(c) - a * b.Dot(c); }

@@ -225,19 +225,20 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
         if (C >= 0.0f) continue;
 
         const float w_p = world.particle_inv_masses_[c.body_a_particle_idx];
-        const float w_a = (1.0f - c.t) * world.particle_inv_masses_[c.body_b_p1_idx];
-        const float w_b = c.t * world.particle_inv_masses_[c.body_b_p2_idx];
+        const float w_a = world.particle_inv_masses_[c.body_b_p1_idx];
+        const float w_b = world.particle_inv_masses_[c.body_b_p2_idx];
 
         // grad_p = n, grad_a = -(1-t)n, grad_b = -t*n
-        const float w_sum = w_p + (1.0f - c.t) * w_a + c.t * w_b;
+        const float w_sum = w_p + (1.f - c.t) * (1.f - c.t) * w_a + c.t * c.t * w_b;
+        
         if (w_sum < 1e-6f) continue;
 
         const float delta_lambda = -C / w_sum ;
 
         // Move particles
         world.particle_positions_[c.body_a_particle_idx] += c.normal * (w_p * delta_lambda);
-        world.particle_positions_[c.body_b_p1_idx] -= c.normal * (w_a * delta_lambda);
-        world.particle_positions_[c.body_b_p2_idx] -= c.normal * (w_b * delta_lambda);
+        world.particle_positions_[c.body_b_p1_idx] -= c.normal * ((1.f - c.t) * w_a * delta_lambda);
+        world.particle_positions_[c.body_b_p2_idx] -= c.normal * (c.t * w_b * delta_lambda);
         
         // ===== tangent friction =====
         
@@ -249,10 +250,11 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
         Vec2 rel_dx = particle_dx - proj_dx;
         Vec2 rel_dx_tangent = rel_dx - c.normal * rel_dx.Dot(c.normal);
         const float rel_dx_tangent_len = rel_dx_tangent.Length();
-        Vec2 tangent_dir = rel_dx_tangent / rel_dx_tangent_len;
         
         if (rel_dx_tangent_len <= 1e-6f) continue;
-
+        
+        Vec2 tangent_dir = rel_dx_tangent / rel_dx_tangent_len;
+        
         const float mu = std::sqrt(world.particle_frictions_[c.body_a_particle_idx] * world.particle_frictions_[c.body_b_p1_idx]);
         const float normal_dx = -C;
         const float final_friction = std::min(rel_dx_tangent_len, normal_dx * mu);
@@ -260,9 +262,8 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
         const float delta_lambda_t = final_friction / w_sum;
         
         world.particle_positions_[c.body_a_particle_idx] -= tangent_dir * delta_lambda_t * w_p;
-        world.particle_positions_[c.body_b_p1_idx] += tangent_dir * delta_lambda_t * w_a;
-        world.particle_positions_[c.body_b_p2_idx] += tangent_dir * delta_lambda_t * w_b;
-        
+        world.particle_positions_[c.body_b_p1_idx] += tangent_dir * delta_lambda_t * (1.f - c.t) * w_a;
+        world.particle_positions_[c.body_b_p2_idx] += tangent_dir * delta_lambda_t * c.t * w_b;
     }
 }
 
