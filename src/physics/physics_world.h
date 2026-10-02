@@ -142,7 +142,8 @@ public:
     std::unordered_map<uint64_t, uint32_t> manifold_map_;
     
     bool show_debug_contact_points_ = true;
-    bool show_debug_clipping_ = true;
+    bool show_debug_clipping_ = false;
+    bool is_multi_thread_{true};
     std::vector<std::array<Vec2, 2>> debug_incident_edges_;
     std::vector<std::array<Vec2, 2>> debug_reference_edges_;
     PhysicsProfileData profile_data_;

@@ -23,7 +23,7 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     rope_start_pos.x -= 7.f;
     rope_start_pos.y += 5.f;
     const Vec2 rope_end_pos{rope_start_pos.x + 9.f, rope_start_pos.y};
-    SoftBodyHandle rope_handle =  world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.5f, 0.000000f, true, true);
+    world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.5f, 0.000000f, true, true);
     
     // Floating obstacle Bodies.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) - 700.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
@@ -40,7 +40,7 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
         {0.f, 0.f}, floating_bodies_angular_vel_,
         0.f, 3.2f, 0.3f, floating_bodies_restitution_, floating_bodies_friction_);
     
-    floating_wide_box_2_ = world.CreateBox(floating_wide_box_pos, std::numbers::pi / 2,
+    floating_wide_box_2_ = world.CreateBox(floating_wide_box_pos, static_cast<float>(std::numbers::pi / 2),
         {0.f, 0.f}, floating_bodies_angular_vel_,
         0.f, 3.2f, 0.3f, floating_bodies_restitution_, floating_bodies_friction_);
     
@@ -149,6 +149,10 @@ namespace
 
 void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world)
 {
+    using Clock = std::chrono::high_resolution_clock;
+    using Duration = std::chrono::duration<double, std::milli>;
+    const auto start = Clock::now();
+    
     // ImGui New Frame.
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -157,8 +161,6 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     int w, h;
     SDL_GetWindowSize(window, &w, &h);
     const float float_h = static_cast<float>(h);
-    
-    RenderPhysicsControlPanel(window, world, w);
     
     ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
 
@@ -269,6 +271,8 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         RenderBvhDebug(world.GetBvhNodes(), 0, bvh_draw_max_depth_, float_h);
     }
     
+    RenderPhysicsControlPanel(window, world, w, Duration(Clock::now() - start).count());
+    
     ImGui::Render();
     SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
     SDL_RenderClear(renderer);
@@ -277,7 +281,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     SDL_RenderPresent(renderer);
 }
 
-void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, const int window_width)
+void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, const int window_width, const double render_time_ms)
 {
     ImGui::SetNextWindowPos(ImVec2(static_cast<float>(window_width) - 415.f, 10), ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(ImVec2(415, 1060), ImGuiCond_Appearing);
@@ -285,8 +289,8 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     
     ImGui::Begin("Physics Engine Control");
 
-    ImGui::Text("FPS: %.1f\nNum Bodies: %d, Num Manifolds: %d\nNum Particle-Rigid Contacts: %d\nNum Particle-Edge Contacts: %d",
-        ImGui::GetIO().Framerate, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size(), world.GetParticleRigidContactsSize(), world.GetParticleEdgeContactsSize());
+    ImGui::Text("FPS: %.1f, Render: %.5f ms\nNum Bodies: %d, Num Manifolds: %d\nNum Particle-Rigid Contacts: %d\nNum Particle-Edge Contacts: %d",
+        ImGui::GetIO().Framerate, render_time_ms, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size(), world.GetParticleRigidContactsSize(), world.GetParticleEdgeContactsSize());
     
     ImGui::Spacing();
     ImGui::Text("Integrate Rigid Vel: %.5f ms\nPredict Particle Pos: %.5f ms",
@@ -427,8 +431,9 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Spacing();
     ImGui::SeparatorText("Debug Options:");
     ImGui::Indent(indent_len);
+    ImGui::Checkbox("Is Multi-Thread", &world.is_multi_thread_);
     ImGui::Checkbox("Draw Contact Info", &world.show_debug_contact_points_);
-    ImGui::Checkbox("Draw Incident Edge & Reference Edge", &world.show_debug_clipping_);
+    ImGui::Checkbox("Draw IncidentEdge & ReferenceEdge(multi-thread only)", &world.show_debug_clipping_);
     ImGui::Text("BVH :");
     ImGui::Checkbox("Draw BVH", &draw_bvh_);
     ImGui::SliderInt("BVH Draw Depth", &bvh_draw_max_depth_, 0, 20);
@@ -461,28 +466,28 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
     case SpawnType::SoftRope:
         {
             const Vec2 end_pos = is_horizontal_ ? spawn_pos + Vec2{rope_spawn_length_, 0.0f} : spawn_pos - Vec2{0.0f, rope_spawn_length_};
-            world.CreateRope(spawn_pos, end_pos, rope_spawn_num_segments_, rope_spawn_mass_, rope_spawn_friction_, rope_spawn_compliance_, fix_start_, fix_end_);
+            world.CreateRope(spawn_pos, end_pos, static_cast<uint16_t>(rope_spawn_num_segments_), rope_spawn_mass_, rope_spawn_friction_, rope_spawn_compliance_, fix_start_, fix_end_);
             break;
         }
 
     case SpawnType::SoftBox:
         world.CreateSoftBox(
             spawn_pos, soft_box_spawn_width_, soft_box_spawn_height_,
-            soft_box_spawn_nx_, soft_box_spawn_ny_,
+            static_cast<uint16_t>(soft_box_spawn_nx_), static_cast<uint16_t>(soft_box_spawn_ny_),
             soft_box_spawn_mass_, soft_box_spawn_friction_, soft_box_spawn_compliance_
         );
         break;
 
     case SpawnType::SoftCircleArea:
         world.CreateSoftCircle(
-            spawn_pos, soft_circle_spawn_radius_, soft_circle_spawn_num_segments_,
+            spawn_pos, soft_circle_spawn_radius_, static_cast<uint16_t>(soft_circle_spawn_num_segments_),
             soft_circle_spawn_mass_, soft_circle_spawn_friction_, soft_circle_spawn_compliance_
         );
         break;
 
     case SpawnType::SoftCirclePressure:
         world.CreatePressureSoftCircle(
-            spawn_pos, pressure_circle_spawn_radius_, pressure_circle_spawn_num_segments_,
+            spawn_pos, pressure_circle_spawn_radius_, static_cast<uint16_t>(pressure_circle_spawn_num_segments_),
             pressure_circle_spawn_mass_, pressure_circle_spawn_friction_, pressure_circle_spawn_compliance_
         );
         break;
@@ -606,11 +611,11 @@ void Application::DrawBvhNode(ImDrawList* draw_list, const std::vector<BvhNode>&
     if (!node.IsLeaf()) {
         if (node.left_child != std::numeric_limits<uint32_t>::max())
         {
-            DrawBvhNode(draw_list, nodes, node.left_child, current_depth + 1, max_render_depth, hovered_node_idx, window_height);
+            DrawBvhNode(draw_list, nodes, (uint32_t)node.left_child, current_depth + 1, max_render_depth, hovered_node_idx, window_height);
         }
         if (node.right_child != std::numeric_limits<uint32_t>::max())
         {
-            DrawBvhNode(draw_list, nodes, node.right_child, current_depth + 1, max_render_depth, hovered_node_idx, window_height);    
+            DrawBvhNode(draw_list, nodes, (uint32_t)node.right_child, current_depth + 1, max_render_depth, hovered_node_idx, window_height);    
         }
     }
 }

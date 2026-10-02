@@ -49,8 +49,8 @@ BodyHandle PhysicsWorld::CreatePolygon(const Vec2& pos, const float rotation, co
 {
     float min_x = std::numeric_limits<float>::max();
     float min_y = std::numeric_limits<float>::max();
-    float max_x = std::numeric_limits<float>::min();
-    float max_y = std::numeric_limits<float>::min();
+    float max_x = std::numeric_limits<float>::lowest();
+    float max_y = std::numeric_limits<float>::lowest();
     for (const Vec2& vertex : vertices)
     {
         min_x = std::min(vertex.x, min_x);

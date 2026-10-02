@@ -19,7 +19,7 @@ public:
     void Input(SDL_Window* window, bool &is_running, PhysicsWorld& world);
     static void Update(PhysicsWorld& world, float dt);
     void Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world);
-    void RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, int window_width);
+    void RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, int window_width, double render_time_ms);
     void SpawnBodyAt(PhysicsWorld& world, SpawnType type, Vec2 spawn_pos) const;
     void RenderSpawnTypeConfigUi(SpawnType type);
     void ResetWorld(SDL_Window* window, PhysicsWorld& world);
