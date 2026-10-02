@@ -50,10 +50,10 @@ private:
     // ===== Scene Bodies Setting =====
     float floating_bodies_angular_vel_{0.5f};
     float floating_bodies_restitution_{0.2f};
-    float floating_bodies_friction_{0.2f};
+    float floating_bodies_friction_{0.5f};
     
     float boundary_restitution_{0.2f};
-    float boundary_friction_{0.2f};
+    float boundary_friction_{0.5f};
     
     // ===== Mouse Spawn Settings =====
     SpawnType left_click_spawn_type_{SpawnType::RigidBox};
@@ -63,14 +63,14 @@ private:
     float circle_spawn_mass_{5.f};
     float circle_spawn_radius_{1.f};
     float circle_spawn_restitution_{0.2f};
-    float circle_spawn_friction_{0.2f};
+    float circle_spawn_friction_{0.5f};
     
     // Rigid Box
     float box_spawn_mass_{5.f};
     float box_spawn_half_width_{1.f};
     float box_spawn_half_height_{1.f};
     float box_spawn_restitution_{0.2f};
-    float box_spawn_friction_{0.2f};
+    float box_spawn_friction_{0.5f};
     
     // Soft Rope
     bool fix_start_{true};
@@ -80,7 +80,7 @@ private:
     int rope_spawn_num_segments_{20};
     float rope_spawn_mass_{5.f};
     float rope_spawn_friction_{0.5f};
-    float rope_spawn_compliance_{0.0000000f};
+    float rope_spawn_compliance_{0.0005f};
 
     // Soft Box (Triangle Area)
     float soft_box_spawn_width_{2.f};
@@ -89,21 +89,21 @@ private:
     int soft_box_spawn_ny_{5};
     float soft_box_spawn_mass_{5.f};
     float soft_box_spawn_friction_{0.5f};
-    float soft_box_spawn_compliance_{0.0000000f};
+    float soft_box_spawn_compliance_{0.0005f};
 
     // Soft Circle (Triangle Area)
     float soft_circle_spawn_radius_{1.4f};
     int soft_circle_spawn_num_segments_{20};
     float soft_circle_spawn_mass_{10.f};
     float soft_circle_spawn_friction_{0.5f};
-    float soft_circle_spawn_compliance_{0.0000000f};
+    float soft_circle_spawn_compliance_{0.0005f};
 
     // Soft Circle (Pressure)
     float pressure_circle_spawn_radius_{1.4f};
     int pressure_circle_spawn_num_segments_{20};
     float pressure_circle_spawn_mass_{10.f};
     float pressure_circle_spawn_friction_{0.5f};
-    float pressure_circle_spawn_compliance_{0.0000000f};
+    float pressure_circle_spawn_compliance_{0.f};
     
     // ===== Others =====
     float arrow_key_force_{800.f};

@@ -298,6 +298,8 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
         const uint32_t next = handle.start_particle_idx + 1 + ((i + 1) % segments);
         surface_particles_idx_.push_back(curr);
 
+        AddDistanceConstraint(*this, handle.start_particle_idx, curr, compliance);
+        
         // Outer Ring Distance  Constraint
         AddDistanceConstraint(*this, curr, next, compliance);
         surface_edges_.emplace_back(curr, next);
@@ -348,7 +350,7 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
     }
     
     // Internal Global Area Constraint
-    AddGlobalAreaConstraint(*this, handle.start_particle_idx, handle.particle_count, compliance);
+    AddGlobalAreaConstraint(*this, handle.start_particle_idx, handle.particle_count, 0.f);
     
     soft_body_handles_.push_back(handle);
     return handle;
@@ -421,6 +423,19 @@ void PhysicsWorld::Step(const float dt)
         CollisionDetectionSystem::CheckCollision(*this);
 
         start = Clock::now();
+        for (auto& distance_constraint : distance_constraints_)
+        {
+            distance_constraint.lambda = 0.f;
+        }
+        for (auto& triangle_area_constraint : triangle_area_constraints_)
+        {
+            triangle_area_constraint.lambda = 0.f;
+        }
+        for (auto& global_area_constraint : global_area_constraints_)
+        {
+            global_area_constraint.lambda = 0.f;
+        }
+        
         for (int iter = 0; iter < xpbd_iterations; ++iter)
         {
             if (iter % 2 == 0) 

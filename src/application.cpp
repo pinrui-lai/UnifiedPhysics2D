@@ -23,7 +23,7 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     rope_start_pos.x -= 7.f;
     rope_start_pos.y += 5.f;
     const Vec2 rope_end_pos{rope_start_pos.x + 9.f, rope_start_pos.y};
-    world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.5f, 0.000000f, true, true);
+    world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.5f, 0.0005f, true, true);
     
     // Floating obstacle Bodies.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) - 700.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
@@ -526,10 +526,10 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SameLine();
         ImGui::Checkbox("Horizontal", &is_horizontal_);
         ImGui::SliderFloat("Length##rope", &rope_spawn_length_, 1.0f, 30.0f);
-        ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 2, 100);
+        ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 1, 100);
         ImGui::SliderFloat("Mass##rope", &rope_spawn_mass_, 0.1f, 100.0f);
         ImGui::SliderFloat("Friction##rope", &rope_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Compliance##rope", &rope_spawn_compliance_, 0.0f, 0.01f, "%.7f");
+        ImGui::SliderFloat("Compliance##rope", &rope_spawn_compliance_, 0.0f, 0.005f, "%.7f");
         break;
 
     case SpawnType::SoftBox:
@@ -541,7 +541,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderInt("Grid Ny##sbox", &soft_box_spawn_ny_, 2, 20);
         ImGui::SliderFloat("Mass##sbox", &soft_box_spawn_mass_, 0.1f, 100.0f);
         ImGui::SliderFloat("Friction##sbox", &soft_box_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Compliance##sbox", &soft_box_spawn_compliance_, 0.0f, 0.01f, "%.7f");
+        ImGui::SliderFloat("Compliance##sbox", &soft_box_spawn_compliance_, 0.0f, 0.005f, "%.7f");
         break;
 
     case SpawnType::SoftCircleArea:
@@ -551,7 +551,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderInt("Segments##scircle", &soft_circle_spawn_num_segments_, 3, 60);
         ImGui::SliderFloat("Mass##scircle", &soft_circle_spawn_mass_, 0.1f, 100.0f);
         ImGui::SliderFloat("Friction##scircle", &soft_circle_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Compliance##scircle", &soft_circle_spawn_compliance_, 0.0f, 0.01f, "%.7f");
+        ImGui::SliderFloat("Compliance##scircle", &soft_circle_spawn_compliance_, 0.0f, 0.005f, "%.7f");
         break;
 
     case SpawnType::SoftCirclePressure:
@@ -561,7 +561,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderInt("Segments##pcircle", &pressure_circle_spawn_num_segments_, 3, 60);
         ImGui::SliderFloat("Mass##pcircle", &pressure_circle_spawn_mass_, 0.0f, 100.0f);
         ImGui::SliderFloat("Friction##pcircle", &pressure_circle_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.0f, 0.01f, "%.7f");
+        ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.0f, 0.001f, "%.7f");
         break;
     }
 }

@@ -83,7 +83,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
         for (uint8_t i = 0; i < manifold.contact_count; ++i)
         {
             Contact& new_c = manifold.contacts[i];
-        
+            
             for (uint8_t j = 0; j < old_contact_count; ++j)
             {
                 const Contact& old_c = old_contacts[j];
@@ -111,6 +111,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
 
 void CollisionDetectionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
 {
+    constexpr int max_iterations = 32; 
     const uint32_t index_a = manifold.a;
     const uint32_t index_b = manifold.b;
     
@@ -126,20 +127,30 @@ void CollisionDetectionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
     
     dir = -minkowski_support.Normalized(); // Next direction to search is 'minkowski_support point to origin'.
     
-    while (true)
+    auto reset_manifold = [&manifold]()
     {
+        manifold.contact_count = 0;
+        manifold.contacts[0].normal_impulse_sum = 0;
+        manifold.contacts[0].tangent_impulse_sum = 0;
+        manifold.contacts[1].normal_impulse_sum = 0;
+        manifold.contacts[1].tangent_impulse_sum = 0;
+    };
+    
+    for (int i = 0; i < max_iterations; ++i)
+    {
+        if (dir.LengthSquared() < 1e-6f)
+        {
+            reset_manifold();
+            return;
+        }
+        
         Vec2 new_minkowski_support = GetSupport(world, index_a, dir) - GetSupport(world, index_b, -dir);
         
         // The new_minkowski_support does not exceed the origin in the dir direction.
         // Dot(Origin point to new_minkowski_support, dir)
         if (new_minkowski_support.Dot(dir) < 0)
         {
-            manifold.contact_count = 0;
-            for (auto& contact : manifold.contacts)
-            {
-                contact.normal_impulse_sum = 0;
-                contact.tangent_impulse_sum = 0;
-            }
+            reset_manifold();
             return;
         }
         
@@ -150,10 +161,16 @@ void CollisionDetectionSystem::Gjk(PhysicsWorld& world, Manifold& manifold)
         {
             manifold.contact_count = 1;
             auto [collision_normal, depth] = Epa(world, simplex, manifold);
+            if (depth < 1e-6f){
+                reset_manifold();
+                return;
+            }
             GetCollisionPoints(world, collision_normal, depth, manifold);
             return;
         }
     }
+    
+    reset_manifold();
 }
 
 bool CollisionDetectionSystem::HandleSimplex(FixedSimplex& simplex, Vec2& dir)
@@ -166,7 +183,7 @@ bool CollisionDetectionSystem::HandleSimplex(FixedSimplex& simplex, Vec2& dir)
         const Vec2 ab = simplex[0] - a; // b - a
         dir = TripleProduct(ab, ao, ab);
         
-        if (dir.LengthSquared() < 0.00001f)
+        if (dir.LengthSquared() < 1e-6f)
         {
             // If the origin is on AB, use AB's normal as dir.
             dir = ab.NormalWithoutNormalized();
@@ -263,7 +280,7 @@ std::pair<Vec2, float> CollisionDetectionSystem::Epa(const PhysicsWorld& world, 
             Vec2 normal = edge.Normal();
             
             float distance = vertex_a.Dot(normal);
-            if (distance < 0)
+            if (distance < 1e-6f)
             {
                 distance = 0.f;
             }
@@ -281,7 +298,7 @@ std::pair<Vec2, float> CollisionDetectionSystem::Epa(const PhysicsWorld& world, 
         
         // It is already the boundary of the complete Minkowski diff.
         const float new_point_distance = new_point.Dot(min_normal);
-        if (constexpr float tolerance = 0.00001f; new_point_distance - min_distance < tolerance || polytope.size() >= polytope.capacity())
+        if (constexpr float tolerance = 1e-5f; new_point_distance - min_distance < tolerance || polytope.size() >= polytope.capacity())
         {
             return {min_normal, min_distance};
         }
@@ -360,11 +377,11 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
             float edge_b_dot_normal;
             GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
             
-            const bool is_ref_a = edge_a_dot_normal > edge_b_dot_normal;
-            const std::array<Vec2, 2> ref_edge_pos = edge_a_dot_normal > edge_b_dot_normal ? edge_pos_a : edge_pos_b;
-            const std::array<Vec2, 2> inc_edge_pos = edge_a_dot_normal > edge_b_dot_normal ? edge_pos_b : edge_pos_a;
-            const std::array<uint32_t, 2> ref_edge_ids = edge_a_dot_normal > edge_b_dot_normal ? edge_ids_a : edge_ids_b;
-            const std::array<uint32_t, 2> inc_edge_ids = edge_a_dot_normal > edge_b_dot_normal ? edge_ids_b : edge_ids_a;
+            const bool is_ref_a = edge_a_dot_normal > edge_b_dot_normal + 1e-6f;
+            const std::array<Vec2, 2> ref_edge_pos = is_ref_a ? edge_pos_a : edge_pos_b;
+            const std::array<Vec2, 2> inc_edge_pos = is_ref_a ? edge_pos_b : edge_pos_a;
+            const std::array<uint32_t, 2> ref_edge_ids = is_ref_a ? edge_ids_a : edge_ids_b;
+            const std::array<uint32_t, 2> inc_edge_ids = is_ref_a ? edge_ids_b : edge_ids_a;
             
             if (world.show_debug_clipping_ && !world.is_multi_thread_){
                 world.debug_incident_edges_.push_back(inc_edge_pos);
@@ -374,6 +391,7 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
             // Clip incident edge.
             std::array<Vec2, 2> clipped_incident_edge = inc_edge_pos;
             std::array<int, 2> clipping_ref_vertex_ids{-1, -1}; // Endpoint id of reference edge, which clips incident edge. -1 : Not cut
+            
             const Vec2 ref_a_to_b = ref_edge_pos[1] - ref_edge_pos[0]; // normal of clip-face (ref edge).
             ClipEdge(ref_a_to_b, ref_edge_pos[0], ref_edge_ids[0], clipped_incident_edge, clipping_ref_vertex_ids);
             
@@ -403,10 +421,10 @@ void CollisionDetectionSystem::GetCollisionPoints(PhysicsWorld& world, Vec2 coll
             };
             
             auto assign_feature_id = [&](Contact& target_contact, const uint32_t inc_edge_ids_idx) {
-                uint8_t& inc_index = is_ref_a ? target_contact.id.features.index_b : contact1.id.features.index_a;
-                uint8_t& inc_type = is_ref_a ? target_contact.id.features.type_b : contact1.id.features.type_a;
-                uint8_t& ref_index = is_ref_a ? target_contact.id.features.index_a : contact1.id.features.index_b;
-                uint8_t& ref_type = is_ref_a ? contact1.id.features.type_a : contact1.id.features.type_b;
+                uint8_t& inc_index = is_ref_a ? target_contact.id.features.index_b : target_contact.id.features.index_a;
+                uint8_t& inc_type = is_ref_a ? target_contact.id.features.type_b : target_contact.id.features.type_a;
+                uint8_t& ref_index = is_ref_a ? target_contact.id.features.index_a : target_contact.id.features.index_b;
+                uint8_t& ref_type = is_ref_a ? target_contact.id.features.type_a : target_contact.id.features.type_b;
                 
                 // Incident edge Not cut : Incident edge Got cut
                 inc_index = clipping_ref_vertex_ids[inc_edge_ids_idx] == -1 ? inc_edge_ids[inc_edge_ids_idx] : inc_edge_ids[0];
@@ -474,7 +492,8 @@ void CollisionDetectionSystem::ClipEdge(const Vec2 clip_face_inner_normal, const
     // If dot results have one positive and one negative, the negative one is outside clip-face.
     // Clip by dot results ratio.
     const Vec2 inc_a_to_b = out_clipped_edges[1] - out_clipped_edges[0];
-    if (inc_a_dot_ref < 0)
+    
+    if (inc_a_dot_ref < 0.f)
     {
         // Clip point a (index 0)
         const float clip_ratio = -inc_a_dot_ref / (-inc_a_dot_ref + inc_b_dot_ref);    
@@ -483,7 +502,7 @@ void CollisionDetectionSystem::ClipEdge(const Vec2 clip_face_inner_normal, const
         // Reference edge's vertex id on the clip-face.(which endpoint on the reference edge clip the incident edge)
         out_clip_face_ids[0] = clip_face_id; 
     }
-    if (inc_b_dot_ref < 0)
+    if (inc_b_dot_ref < 0.f)
     {
         // Clip point b (index 1)
         const float clip_ratio = -inc_b_dot_ref / (-inc_b_dot_ref + inc_a_dot_ref);    

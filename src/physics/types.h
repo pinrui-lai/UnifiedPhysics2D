@@ -34,7 +34,7 @@ struct Vec2
     Vec2 Normalized() const
     {
         const float len = Length();
-        return len > 0.0f ? Vec2{x / Length(), y / Length()} : Vec2{0.0f, 0.0f};
+        return len > 0.0f ? Vec2{x / len, y / len} : Vec2{0.0f, 0.0f};
     }
     
     // Cartesian Coordinate System (The Y-axis direction is upwards as positive).
