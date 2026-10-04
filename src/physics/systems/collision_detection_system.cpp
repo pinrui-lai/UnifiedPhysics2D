@@ -64,7 +64,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     
     // Soft vs Soft.
     start = Clock::now();
-    CheckSoftSoftCollision(world, soft_soft_contacts, physics_config::kTwoParticlesThickness);
+    CheckSoftSoftCollision(world, soft_soft_contacts);
     world.profile_data_.soft_soft_ms += Duration(Clock::now() - start).count();
     
     // Rigid vs Rigid (GJK + EPA + Clipping).
@@ -790,11 +790,10 @@ void CollisionDetectionSystem::CheckRigidParticleCollision(PhysicsWorld& world, 
     }, shape);
 }
 
-uint32_t CollisionDetectionSystem::CountParticleEdgeCollisions(const PhysicsWorld& world, const float total_thickness,
-    const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b)
+uint32_t CollisionDetectionSystem::CountParticleEdgeCollisions(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b)
 {
     uint32_t count = 0;
-    const float total_thickness_sq = total_thickness * total_thickness;
+    constexpr float total_thickness_sq = physics_config::kTwoParticlesThickness * physics_config::kTwoParticlesThickness;
 
     for (uint32_t i = soft_body_a.start_surface_particle_idx; i < soft_body_a.start_surface_particle_idx + soft_body_a.surface_particle_count; ++i) 
     {
@@ -815,23 +814,21 @@ uint32_t CollisionDetectionSystem::CountParticleEdgeCollisions(const PhysicsWorl
 
             const float t = (particle_pos - a).Dot(ab) / ab_len_sq;
             if (t < 0.f || t > 1.f) continue;
+            if (Vec2 proj = a + ab * t; (particle_pos - proj).LengthSquared() > total_thickness_sq) continue; 
             
-            Vec2 proj = a + ab * t;
-            if (Vec2 diff = particle_pos - proj; diff.LengthSquared() < total_thickness_sq) {
-                ++count;
-            }
+            ++count;
         }
     }
 
     return count;
 }
 
-void CollisionDetectionSystem::CheckParticleEdgeCollision(const PhysicsWorld& world, const float total_thickness, const SoftBodyHandle& soft_body_a,
-    const SoftBodyHandle& soft_body_b, XpbdParticleEdgeCollisionConstraint* out_contacts)
+uint32_t CollisionDetectionSystem::CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b, XpbdParticleEdgeCollisionConstraint* out_contacts)
 {
     uint32_t write_offset = 0;
-    const float total_thickness_sq = total_thickness * total_thickness;
-
+    constexpr float total_thickness_sq = physics_config::kTwoParticlesThickness * physics_config::kTwoParticlesThickness;
+    const bool is_b_closed = world.surface_edges_[soft_body_b.start_edge_idx + soft_body_b.edge_count - 1].second == world.surface_edges_[soft_body_b.start_edge_idx].first;
+    
     for (uint32_t i = soft_body_a.start_surface_particle_idx; i < soft_body_a.start_surface_particle_idx + soft_body_a.surface_particle_count; ++i) 
     {
         const auto particle_idx = world.surface_particles_idx_[i];
@@ -842,32 +839,34 @@ void CollisionDetectionSystem::CheckParticleEdgeCollision(const PhysicsWorld& wo
             const auto edge_idx = soft_body_b.start_edge_idx + j;
             const auto& edge = world.surface_edges_[edge_idx];
             
-            const Vec2& a = world.particle_positions_[edge.first];
-            const Vec2& b = world.particle_positions_[edge.second];
+            const Vec2& a_pos = world.particle_positions_[edge.first];
+            const Vec2& b_pos = world.particle_positions_[edge.second];
 
-            Vec2 ab = b - a;
+            Vec2 ab = b_pos - a_pos;
             const float ab_len_sq = ab.LengthSquared();
             if (ab_len_sq < 1e-6f) continue;
 
-            const float t = (particle_pos - a).Dot(ab) / ab_len_sq;
+            const float t = (particle_pos - a_pos).Dot(ab) / ab_len_sq;
             if (t < 0.f || t > 1.f) continue;
             
-            Vec2 proj = a + ab * t;
+            Vec2 proj = a_pos + ab * t;
             Vec2 diff = particle_pos - proj;
 
-            if (const float dist_sq = diff.LengthSquared(); dist_sq < total_thickness_sq) 
-            {
-                const float dist = std::sqrt(dist_sq);
-                const Vec2 normal = (dist > 1e-6f) ? diff / dist : Vec2{0.0f, 1.0f};
-                
-                out_contacts[write_offset++] = XpbdParticleEdgeCollisionConstraint{normal, particle_idx, 
-                    edge.first, edge.second, -(dist - total_thickness), t};
-            }
+            const float dist_sq = diff.LengthSquared();
+            if (dist_sq > total_thickness_sq) continue;
+            
+            const float dist = std::sqrt(dist_sq);
+            const Vec2 normal = is_b_closed ? ab.Normal() : dist > 1e-6f ? diff / dist : Vec2{0.f, 1.f};
+            
+            out_contacts[write_offset++] = XpbdParticleEdgeCollisionConstraint{normal, particle_idx, 
+                edge.first, edge.second, -(dist - physics_config::kTwoParticlesThickness), t};
         }
     }
+    
+    return write_offset;
 }
 
-void CollisionDetectionSystem::CheckSoftSoftCollision(PhysicsWorld& world, const std::pmr::vector<std::pair<uint32_t, uint32_t>>& pairs, const float total_thickness)
+void CollisionDetectionSystem::CheckSoftSoftCollision(PhysicsWorld& world, const std::pmr::vector<std::pair<uint32_t, uint32_t>>& pairs)
 {
     const size_t num_pairs = pairs.size();
     if (num_pairs == 0) return;
@@ -879,7 +878,10 @@ void CollisionDetectionSystem::CheckSoftSoftCollision(PhysicsWorld& world, const
     
     // Calculate how many contact each pair has.
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(), [&](const size_t i) {
-        counts[i] = CountParticleEdgeCollisions(world, total_thickness, world.soft_body_handles_[pairs[i].first], world.soft_body_handles_[pairs[i].second]);
+        const auto& body_a_handle = world.soft_body_handles_[pairs[i].first];
+        const auto& body_b_handle = world.soft_body_handles_[pairs[i].second];
+        
+        counts[i] = CountParticleEdgeCollisions(world, body_a_handle, body_b_handle) + CountParticleEdgeCollisions(world, body_b_handle, body_a_handle);
     });
 
     // Calculate the Prefix Sum to obtain the Offset for each Task written to `world.particle_edge_contacts_`.
@@ -888,20 +890,29 @@ void CollisionDetectionSystem::CheckSoftSoftCollision(PhysicsWorld& world, const
     std::exclusive_scan(std::execution::par_unseq, counts.begin(), counts.end(), offsets.begin(), 0u);
 
     const uint32_t total_contacts = offsets.back() + counts.back();
+    if (total_contacts == 0) return;
+    
     world.particle_edge_contacts_.resize(total_contacts);
 
+    auto fill_contacts = [&](const size_t i) {
+        if (counts[i] <= 0) return;
+        
+        const auto& body_a_handle = world.soft_body_handles_[pairs[i].first];
+        const auto& body_b_handle = world.soft_body_handles_[pairs[i].second];
+
+        const uint32_t current_offset = offsets[i];
+        XpbdParticleEdgeCollisionConstraint* write_ptr = world.particle_edge_contacts_.data() + current_offset;
+        
+        const uint32_t written_a_vs_b = CheckParticleEdgeCollision(world, body_a_handle, body_b_handle, write_ptr);
+        CheckParticleEdgeCollision(world, body_b_handle, body_a_handle, write_ptr + written_a_vs_b);
+    };
+    
     // Parallel direct filling into the `world.particle_edge_contacts_`
     if (world.is_multi_thread_){
-        std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(), [&](size_t i) {
-            if (counts[i] > 0) {
-                CheckParticleEdgeCollision(world, total_thickness, world.soft_body_handles_[pairs[i].first], world.soft_body_handles_[pairs[i].second], &world.particle_edge_contacts_[offsets[i]]);
-            }});
+        std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(), fill_contacts);
     }
     else{
-        std::for_each(std::execution::seq, index_range.begin(), index_range.end(), [&](size_t i) {
-           if (counts[i] > 0) {
-               CheckParticleEdgeCollision(world, total_thickness, world.soft_body_handles_[pairs[i].first], world.soft_body_handles_[pairs[i].second], &world.particle_edge_contacts_[offsets[i]]);
-           }});
+        std::for_each(std::execution::seq, index_range.begin(), index_range.end(), fill_contacts);
     }
 }
 

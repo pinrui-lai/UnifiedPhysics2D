@@ -1,5 +1,7 @@
 #include "xpbd_solver_system.h"
 
+#include <algorithm>
+
 #include "physics_world.h"
 
 void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
@@ -216,14 +218,18 @@ void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float sub_
 void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
 {
     for (const auto& c : world.particle_edge_contacts_) {
+        Vec2& p_pos = world.particle_positions_[c.body_a_particle_idx];
+        Vec2& a_pos = world.particle_positions_[c.body_b_p1_idx];
+        Vec2& b_pos = world.particle_positions_[c.body_b_p2_idx];
+        
         // Compute current penetration.
-        Vec2 ab = world.particle_positions_[c.body_b_p2_idx] - world.particle_positions_[c.body_b_p1_idx];
-        Vec2 proj = world.particle_positions_[c.body_b_p1_idx] + ab * c.t;
-        Vec2 diff = world.particle_positions_[c.body_a_particle_idx] - proj;
-            
+        Vec2 ab = b_pos - a_pos;
+        Vec2 proj = a_pos + ab * c.t; 
+        Vec2 diff = p_pos - proj;
+        
         float C = diff.Dot(c.normal) - physics_config::kTwoParticlesThickness;
         if (C >= 0.0f) continue;
-
+        
         const float w_p = world.particle_inv_masses_[c.body_a_particle_idx];
         const float w_a = world.particle_inv_masses_[c.body_b_p1_idx];
         const float w_b = world.particle_inv_masses_[c.body_b_p2_idx];
@@ -236,16 +242,16 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
         const float delta_lambda = -C / w_sum ;
 
         // Move particles
-        world.particle_positions_[c.body_a_particle_idx] += c.normal * (w_p * delta_lambda);
-        world.particle_positions_[c.body_b_p1_idx] -= c.normal * ((1.f - c.t) * w_a * delta_lambda);
-        world.particle_positions_[c.body_b_p2_idx] -= c.normal * (c.t * w_b * delta_lambda);
+        p_pos += c.normal * (w_p * delta_lambda);
+        a_pos -= c.normal * ((1.f - c.t) * w_a * delta_lambda);
+        b_pos -= c.normal * (c.t * w_b * delta_lambda);
         
         // ===== tangent friction =====
         
         // Compute relative delta x.
-        Vec2 particle_dx = world.particle_positions_[c.body_a_particle_idx] - world.particle_prev_positions_[c.body_a_particle_idx];
-        Vec2 edge_p1_dx = world.particle_positions_[c.body_b_p1_idx] - world.particle_prev_positions_[c.body_b_p1_idx];
-        Vec2 edge_p2_dx = world.particle_positions_[c.body_b_p2_idx] - world.particle_prev_positions_[c.body_b_p2_idx];
+        Vec2 particle_dx = p_pos - world.particle_prev_positions_[c.body_a_particle_idx];
+        Vec2 edge_p1_dx = a_pos - world.particle_prev_positions_[c.body_b_p1_idx];
+        Vec2 edge_p2_dx = b_pos - world.particle_prev_positions_[c.body_b_p2_idx];
         Vec2 proj_dx = edge_p1_dx * (1 - c.t) + edge_p2_dx * c.t;
         Vec2 rel_dx = particle_dx - proj_dx;
         Vec2 rel_dx_tangent = rel_dx - c.normal * rel_dx.Dot(c.normal);
@@ -261,13 +267,13 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
 
         const float delta_lambda_t = final_friction / w_sum;
         
-        world.particle_positions_[c.body_a_particle_idx] -= tangent_dir * delta_lambda_t * w_p;
-        world.particle_positions_[c.body_b_p1_idx] += tangent_dir * delta_lambda_t * (1.f - c.t) * w_a;
-        world.particle_positions_[c.body_b_p2_idx] += tangent_dir * delta_lambda_t * c.t * w_b;
+        p_pos -= tangent_dir * delta_lambda_t * w_p;
+        a_pos += tangent_dir * delta_lambda_t * (1.f - c.t) * w_a;
+        b_pos += tangent_dir * delta_lambda_t * c.t * w_b;
     }
 }
 
-void XpbdSolver::FinalizeParticles(PhysicsWorld& world, float inv_sdt)
+void XpbdSolver::FinalizeParticles(PhysicsWorld& world, const float inv_sdt)
 {
     const uint32_t count = world.particle_positions_.size();
     for (uint32_t i = 0; i < count; ++i)

@@ -63,10 +63,9 @@ private:
     static void CleanupStaleManifolds(PhysicsWorld& world);
     
     static void CheckRigidParticleCollision(PhysicsWorld& world, uint32_t query_obj_idx, uint32_t particle_idx);
-    static uint32_t CountParticleEdgeCollisions(const PhysicsWorld& world, float total_thickness, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b);
-    static void CheckParticleEdgeCollision(const PhysicsWorld& world, float total_thickness, const SoftBodyHandle& soft_body_a,
-                                           const SoftBodyHandle& soft_body_b, XpbdParticleEdgeCollisionConstraint* out_contacts);
-    static void CheckSoftSoftCollision(PhysicsWorld& world, const std::pmr::vector<std::pair<uint32_t, uint32_t>>& pairs, float total_thickness);
+    static uint32_t CountParticleEdgeCollisions(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b);
+    static uint32_t CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b, XpbdParticleEdgeCollisionConstraint* out_contacts);
+    static void CheckSoftSoftCollision(PhysicsWorld& world, const std::pmr::vector<std::pair<uint32_t, uint32_t>>& pairs);
     static float SdfCircle(const Vec2 p, const float r) { return p.Length() - r; }
     static float SdfBox(Vec2 p, Vec2 b);
     static Vec2 GetParticleBoxCollisionNormal(Vec2 p, Vec2 b);
