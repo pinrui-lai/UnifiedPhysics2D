@@ -4,8 +4,6 @@
 #include <cmath>
 #include <vector>
 
-class PhysicsWorld;
-
 struct Vec2
 {
     float x{0.0f};
@@ -128,7 +126,6 @@ struct XpbdParticleEdgeCollisionConstraint {
     uint32_t body_a_particle_idx;
     uint32_t body_b_p1_idx;
     uint32_t body_b_p2_idx;
-    float penetration;
     float t; // The ratio of the projected points on the line segment is [0, 1].
 };
 

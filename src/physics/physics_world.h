@@ -8,6 +8,8 @@
 #include "components.h"
 #include "../physics_config.h"
 
+class CollisionNarrowPhase;
+class CollisionBroadPhase;
 class XpbdSolver;
 class CollisionSolverSystem;
 class CollisionDetectionSystem;
@@ -150,6 +152,8 @@ public:
     
     friend MovementSystem;
     friend CollisionDetectionSystem;
+    friend CollisionBroadPhase;
+    friend CollisionNarrowPhase;
     friend CollisionSolverSystem;
     friend XpbdSolver;
 };
