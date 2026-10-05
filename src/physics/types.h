@@ -138,10 +138,10 @@ struct BodyHandle
 struct SoftBodyHandle
 {
     uint32_t start_particle_idx{0};
-    uint32_t start_edge_idx{0};
+    uint32_t start_surface_edge_idx{0};
     uint32_t start_surface_particle_idx{0};
     uint16_t surface_particle_count{0};
-    uint16_t edge_count{0};
+    uint16_t surface_edge_count{0};
     uint16_t particle_count{0};
     
     bool IsValid() const { return particle_count > 0; }

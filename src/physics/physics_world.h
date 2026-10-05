@@ -88,6 +88,8 @@ private:
     std::vector<XpbdGlobalAreaConstraint> global_area_constraints_;
     std::vector<XpbdContactConstraint> particle_rigid_contacts_;
     std::vector<XpbdParticleEdgeCollisionConstraint> particle_edge_contacts_;
+    std::vector<Aabb> surface_particle_aabbs_;
+    std::vector<Aabb> surface_edge_aabbs_;
     
     std::pmr::monotonic_buffer_resource frame_arena_;
     

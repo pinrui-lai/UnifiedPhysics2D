@@ -50,8 +50,9 @@ private:
     }
     
     static void CheckRigidParticleCollision(PhysicsWorld& world, uint32_t query_obj_idx, uint32_t particle_idx);
-    static uint32_t CountParticleEdgeCollisions(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b);
-    static uint32_t CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b, XpbdParticleEdgeCollisionConstraint* out_contacts);
+    static void UpdateParticleEdgeAabbs(PhysicsWorld& world, const std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
+    static uint32_t CountParticleEdgeCollisions(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b, std::span<const Aabb> body_a_particle_aabbs, std::span<const Aabb> body_b_edge_aabbs);
+    static uint32_t CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b, std::span<const Aabb> body_a_particle_aabbs, std::span<const Aabb> body_b_edge_aabbs, XpbdParticleEdgeCollisionConstraint* out_contacts);
     static void CheckSoftSoftCollision(PhysicsWorld& world, const std::pmr::vector<std::pair<uint32_t, uint32_t>>& pairs);
     
     friend CollisionDetectionSystem;

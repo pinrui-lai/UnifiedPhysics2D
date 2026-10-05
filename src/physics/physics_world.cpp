@@ -123,8 +123,8 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
     SoftBodyHandle handle;
     handle.start_particle_idx = particle_positions_.size();
     handle.particle_count = segments + 1;
-    handle.start_edge_idx = surface_edges_.size();
-    handle.edge_count = segments;
+    handle.start_surface_edge_idx = surface_edges_.size();
+    handle.surface_edge_count = segments;
     handle.start_surface_particle_idx = surface_particles_idx_.size();
     handle.surface_particle_count = segments + 1;
 
@@ -167,8 +167,8 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
     SoftBodyHandle handle;
     handle.start_particle_idx = particle_positions_.size();
     handle.particle_count = res_x * res_y;
-    handle.start_edge_idx = surface_edges_.size();
-    handle.edge_count = (res_x - 1) * 2 + (res_y - 1) * 2;
+    handle.start_surface_edge_idx = surface_edges_.size();
+    handle.surface_edge_count = (res_x - 1) * 2 + (res_y - 1) * 2;
     handle.start_surface_particle_idx = surface_particles_idx_.size();
     handle.surface_particle_count = res_x * 2 + res_y * 2 - 4;
 
@@ -271,8 +271,8 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
     SoftBodyHandle handle;
     handle.start_particle_idx = particle_positions_.size();
     handle.particle_count = segments + 1; // 1 Center + N Outer Ring Particles
-    handle.start_edge_idx = surface_edges_.size();
-    handle.edge_count = segments;
+    handle.start_surface_edge_idx = surface_edges_.size();
+    handle.surface_edge_count = segments;
     handle.start_surface_particle_idx = surface_particles_idx_.size();
     handle.surface_particle_count = segments;
 
@@ -320,8 +320,8 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
     SoftBodyHandle handle;
     handle.start_particle_idx = particle_positions_.size();
     handle.particle_count = segments; // Outer Ring Particles
-    handle.start_edge_idx = surface_edges_.size();
-    handle.edge_count = segments;
+    handle.start_surface_edge_idx = surface_edges_.size();
+    handle.surface_edge_count = segments;
     handle.start_surface_particle_idx = surface_particles_idx_.size();
     handle.surface_particle_count = segments;
     
