@@ -65,8 +65,7 @@ void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::pmr::vector<Aa
     const float inv_scene_aabb_height = 1 / (scene_aabb.max_y - scene_aabb.min_y);
     
     // Get Morton Code and create sort item.
-    std::pmr::vector<Item> items(&world.frame_arena_);
-    items.resize(world_space_aabbs.size());
+    std::pmr::vector<Item> items(world_space_aabbs.size(), &world.frame_arena_);
     
     index_range = std::views::iota(uint32_t{0}, rigid_count);
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(), [&](const uint32_t i)

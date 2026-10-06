@@ -2,7 +2,7 @@
 
 #include <array>
 #include <cmath>
-#include <vector>
+#include <limits>
 
 struct Vec2
 {

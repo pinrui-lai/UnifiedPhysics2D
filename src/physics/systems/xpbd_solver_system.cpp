@@ -116,8 +116,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
         float C = current_area - c.rest_area; // C(x) = A - A0
 
         // Gradients
-        std::pmr::vector<Vec2> grads(&world.frame_arena_);
-        grads.resize(c.particle_count);
+        std::pmr::vector<Vec2> grads(c.particle_count, &world.frame_arena_);
         float grad_sq_sum = 0.0f;
 
         for (uint16_t i = 0; i < c.particle_count; ++i)

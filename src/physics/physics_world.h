@@ -91,12 +91,13 @@ private:
     std::vector<Aabb> surface_particle_aabbs_;
     std::vector<Aabb> surface_edge_aabbs_;
     
+    std::vector<std::byte> buffer_;
     std::pmr::monotonic_buffer_resource frame_arena_;
     
 public:
     // Pre-allocate memory on heap.
     explicit PhysicsWorld(const float gravity = physics_config::kDefaultGravity, const size_t arena_size_bytes = 4 * 1024 * 1024) 
-    : frame_arena_(arena_size_bytes), gravity_(gravity){}
+    : buffer_(arena_size_bytes), frame_arena_(buffer_.data(), sizeof(buffer_)), gravity_(gravity){}
     
     BodyHandle CreateBody(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float inertia, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreateCircle(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float radius, float restitution = 0.1f, float friction = 0.1f);

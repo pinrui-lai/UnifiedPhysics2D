@@ -5,7 +5,6 @@
 #include <imgui_impl_sdlrenderer3.h>
 
 #include "Application.h"
-#include "collision_detection_system.h"
 #include "physics_config.h"
 #include "physics_world.h"
 

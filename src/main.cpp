@@ -7,7 +7,6 @@
 #include "application.h"
 #include "physics_config.h"
 #include "physics/physics_world.h"
-#include "Physics/types.h"
 
 int main(int argc, char* argv[]) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
@@ -34,7 +33,7 @@ int main(int argc, char* argv[]) {
     // Game Setup.
     bool is_running = true;
   
-    PhysicsWorld world;
+    PhysicsWorld world(physics_config::kDefaultGravity, 4 * 1024 * 1024);
     Application application;
     
     // Create floor, walls and floating obstacles.

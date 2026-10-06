@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <unordered_set>
 
 #include "physics_world.h"
 #include "movement_system.h"
@@ -191,9 +190,6 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
 
     auto get_idx = [&](const uint16_t x, const uint16_t y) { return handle.start_particle_idx + y * res_x + x; };
 
-    std::pmr::unordered_set<uint32_t> seen(&frame_arena_);
-    seen.reserve(handle.surface_particle_count);
-    
     // Constraints
     for (uint16_t y = 0; y < res_y - 1; ++y) 
     {
@@ -396,6 +392,7 @@ void PhysicsWorld::Step(const float dt)
     using Clock = std::chrono::high_resolution_clock;
     using Duration = std::chrono::duration<double, std::milli>;
     profile_data_.Reset();
+    frame_arena_.release();
     
     constexpr int sub_steps = 4;
     const float sub_dt = dt / static_cast<float>(sub_steps);
@@ -406,7 +403,6 @@ void PhysicsWorld::Step(const float dt)
     
     for (int sub_step = 0; sub_step < sub_steps; ++sub_step)
     {
-        frame_arena_.release();
         particle_rigid_contacts_.clear();
         particle_edge_contacts_.clear();
         

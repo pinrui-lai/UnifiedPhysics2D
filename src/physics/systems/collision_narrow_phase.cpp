@@ -513,7 +513,7 @@ uint32_t CollisionNarrowPhase::CountParticleEdgeCollisions(const PhysicsWorld& w
             if (!Aabb::Overlap(body_a_particle_aabbs[i], body_b_edge_aabbs[j])) continue;
             
             const auto edge_idx = soft_body_b.start_surface_edge_idx + j;
-            const auto& edge = world.surface_edges_[edge_idx];
+            const auto edge = world.surface_edges_[edge_idx];
             
             const Vec2& a_pos = world.particle_positions_[edge.first];
             const Vec2& b_pos = world.particle_positions_[edge.second];
@@ -550,7 +550,7 @@ uint32_t CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& wo
             if (!Aabb::Overlap(body_a_particle_aabbs[i], body_b_edge_aabbs[j])) continue;
             
             const auto edge_idx = soft_body_b.start_surface_edge_idx + j;
-            const auto& edge = world.surface_edges_[edge_idx];
+            const auto edge = world.surface_edges_[edge_idx];
             
             const Vec2& a_pos = world.particle_positions_[edge.first];
             const Vec2& b_pos = world.particle_positions_[edge.second];
@@ -568,8 +568,16 @@ uint32_t CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& wo
             const float dist_sq = diff.LengthSquared();
             if (dist_sq > total_thickness_sq) continue;
             
-            const float dist = std::sqrt(dist_sq);
-            const Vec2 normal = is_b_closed ? ab.Normal() : dist > 1e-6f ? diff / dist : Vec2{0.f, 1.f};
+            Vec2 normal;
+            if (is_b_closed)
+            {
+                normal = ab.Normal();
+            }
+            else
+            {
+                const float dist = std::sqrt(dist_sq);
+                normal = dist > 1e-6f ? diff / dist : Vec2{0.f, 1.f};
+            }
             
             out_contacts[write_offset++] = XpbdParticleEdgeCollisionConstraint{normal, particle_idx, 
                 edge.first, edge.second, t};
@@ -611,8 +619,7 @@ void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world,
     });
 
     // Calculate the Prefix Sum to obtain the Offset for each Task written to `world.particle_edge_contacts_`.
-    std::pmr::vector<uint32_t> offsets(&world.frame_arena_);
-    offsets.resize(num_pairs);
+    std::pmr::vector<uint32_t> offsets(num_pairs, &world.frame_arena_);
     std::exclusive_scan(std::execution::par_unseq, counts.begin(), counts.end(), offsets.begin(), 0u);
 
     const uint32_t total_contacts = offsets.back() + counts.back();

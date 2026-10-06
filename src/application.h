@@ -1,4 +1,6 @@
 #pragma once
+#include <vector>
+
 #include "types.h"
 
 class PhysicsWorld;
