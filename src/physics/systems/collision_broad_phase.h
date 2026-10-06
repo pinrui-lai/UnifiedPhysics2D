@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <span>
 #include <vector>
 
 #include "types.h"
@@ -11,8 +12,8 @@ class PhysicsWorld;
 class CollisionBroadPhase
 {
 private:
-    static void BuildBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_aabbs);
-    static uint32_t BuildBvhRecursive(PhysicsWorld& world, std::pmr::vector<Item>& items, const std::pmr::vector<Aabb>& world_aabbs, int start, int end);
+    static void BuildWorldBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_space_aabbs);
+    static uint32_t BuildBvhRecursive(PhysicsWorld& world, std::pmr::vector<Item>& items, const std::pmr::vector<Aabb>& world_space_aabbs, std::vector<BvhNode>& bvh_nodes, int start, int end);
     static void QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
     static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, Rot rot, const Aabb& local_aabb);
     

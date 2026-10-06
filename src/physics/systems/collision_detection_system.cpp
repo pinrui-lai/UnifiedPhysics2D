@@ -2,6 +2,9 @@
 #include <execution>
 
 #include "collision_detection_system.h"
+
+#include <iostream>
+
 #include "collision_broad_phase.h"
 #include "collision_narrow_phase.h"
 #include "physics_world.h"
@@ -15,23 +18,22 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     world.debug_reference_edges_.clear();
 
     // ===== Broad-Phase =====
-    auto start = Clock::now();
     const uint32_t rigid_count = world.positions_.size();
     const uint32_t soft_count = world.soft_body_handles_.size();
     const uint32_t total_count = rigid_count + soft_count;
     if (total_count == 0) return;
     
-    std::pmr::vector<Aabb> world_aabbs(&world.frame_arena_);
-    world_aabbs.reserve(total_count);
+    auto start = Clock::now();
+    std::pmr::vector<Aabb> world_aabbs(total_count, &world.frame_arena_);
+    CollisionBroadPhase::BuildWorldBvh(world, world_aabbs);
     
     std::pmr::vector<std::pair<uint32_t, uint32_t>> rigid_particle_contacts(&world.frame_arena_);
-    rigid_particle_contacts.reserve(100);
+    rigid_particle_contacts.reserve((rigid_count + soft_count) * 5);
     
     std::pmr::vector<std::pair<uint32_t, uint32_t>> soft_soft_contacts(&world.frame_arena_);
-    soft_soft_contacts.reserve(100);
-    
-    CollisionBroadPhase::BuildBvh(world, world_aabbs);
+    soft_soft_contacts.reserve(soft_count * 5);
     world.profile_data_.build_bvh_ms += Duration(Clock::now() - start).count();
+    
     
     start = Clock::now();
     // Query rigid bodies for rigid-rigid and rigid-soft contact.
