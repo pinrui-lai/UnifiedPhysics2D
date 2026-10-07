@@ -142,8 +142,7 @@ void CollisionNarrowPhase::Gjk(PhysicsWorld& world, Manifold& manifold)
     reset_manifold();
 }
 
-std::pair<Vec2, float> CollisionNarrowPhase::Epa(const PhysicsWorld& world, const FixedSimplex& simplex,
-    const Manifold& manifold)
+std::pair<Vec2, float> CollisionNarrowPhase::Epa(const PhysicsWorld& world, const FixedSimplex& simplex, const Manifold& manifold)
 {
     FixedPolytope polytope;
     for (uint8_t i = 0; i < simplex.size(); ++i)
@@ -260,8 +259,7 @@ void CollisionNarrowPhase::ClipEdge(const Vec2 clip_face_inner_normal, const Vec
     }
 }
 
-void CollisionNarrowPhase::GetCollisionPoints(PhysicsWorld& world, Vec2 collision_normal, const float depth,
-    Manifold& manifold)
+void CollisionNarrowPhase::GetCollisionPoints(PhysicsWorld& world, Vec2 collision_normal, const float depth, Manifold& manifold)
 {
     uint32_t index_a = manifold.a;
     uint32_t index_b = manifold.b;
@@ -408,8 +406,7 @@ void CollisionNarrowPhase::GetCollisionPoints(PhysicsWorld& world, Vec2 collisio
     , shape_a, shape_b);
 }
 
-void CollisionNarrowPhase::CheckRigidParticleCollision(PhysicsWorld& world, uint32_t query_obj_idx,
-    uint32_t particle_idx)
+void CollisionNarrowPhase::CheckRigidParticleCollision(PhysicsWorld& world, uint32_t query_obj_idx, uint32_t particle_idx)
 {
     Shape& shape = world.shapes_[query_obj_idx];
     std::visit(Overload{
@@ -490,83 +487,49 @@ void CollisionNarrowPhase::UpdateParticleEdgeAabbs(PhysicsWorld& world, const st
             const Vec2& b_pos = world.particle_positions_[edge.second];
 
             world.surface_edge_aabbs_[global_e_idx] = {
-                std::min(a_pos.x, b_pos.x) - physics_config::kTwoParticlesThickness, std::min(a_pos.y, b_pos.y) - physics_config::kTwoParticlesThickness,
-                std::max(a_pos.x, b_pos.x) + physics_config::kTwoParticlesThickness, std::max(a_pos.y, b_pos.y) + physics_config::kTwoParticlesThickness
+                std::min(a_pos.x, b_pos.x) - physics_config::kTwoParticlesThickness,
+                std::min(a_pos.y, b_pos.y) - physics_config::kTwoParticlesThickness,
+                std::max(a_pos.x, b_pos.x) + physics_config::kTwoParticlesThickness,
+                std::max(a_pos.y, b_pos.y) + physics_config::kTwoParticlesThickness
             };
         }
     });
 }
 
-uint32_t CollisionNarrowPhase::CountParticleEdgeCollisions(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a,
-    const SoftBodyHandle& soft_body_b, const std::span<const Aabb> body_a_particle_aabbs, const std::span<const Aabb> body_b_edge_aabbs)
+void CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b,
+    std::span<const Aabb> body_a_particle_aabbs, std::span<const Aabb> body_b_edge_aabbs, std::vector<XpbdParticleEdgeCollisionConstraint>& out_contacts)
 {
-    uint32_t count = 0;
     constexpr float total_thickness_sq = physics_config::kTwoParticlesThickness * physics_config::kTwoParticlesThickness;
-
-    for (uint16_t i = 0; i < soft_body_a.surface_particle_count; ++i) 
-    {
-        const auto particle_idx = world.surface_particles_idx_[soft_body_a.start_surface_particle_idx + i];
-        const Vec2& particle_pos = world.particle_positions_[particle_idx];
-        
-        for (uint16_t j = 0; j < soft_body_b.surface_edge_count; ++j)
-        {
-            if (!Aabb::Overlap(body_a_particle_aabbs[i], body_b_edge_aabbs[j])) continue;
-            
-            const auto edge_idx = soft_body_b.start_surface_edge_idx + j;
-            const auto edge = world.surface_edges_[edge_idx];
-            
-            const Vec2& a_pos = world.particle_positions_[edge.first];
-            const Vec2& b_pos = world.particle_positions_[edge.second];
-
-            Vec2 ab = b_pos - a_pos;
-            const float ab_len_sq = ab.LengthSquared();
-            if (ab_len_sq < 1e-6f) continue;
-
-            const float t = (particle_pos - a_pos).Dot(ab) / ab_len_sq;
-            if (t < 0.f || t > 1.f) continue;
-            if (Vec2 proj = a_pos + ab * t; (particle_pos - proj).LengthSquared() > total_thickness_sq) continue; 
-            
-            ++count;
-        }
-    }
-
-    return count;
-}
-
-uint32_t CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b,
-    std::span<const Aabb> body_a_particle_aabbs, std::span<const Aabb> body_b_edge_aabbs, XpbdParticleEdgeCollisionConstraint* out_contacts)
-{
-    uint32_t write_offset = 0;
-    constexpr float total_thickness_sq = physics_config::kTwoParticlesThickness * physics_config::kTwoParticlesThickness;
-    const bool is_b_closed = world.surface_edges_[soft_body_b.start_surface_edge_idx + soft_body_b.surface_edge_count - 1].second == world.surface_edges_[soft_body_b.start_surface_edge_idx].first;
+    const bool is_b_closed = world.surface_edges_[soft_body_b.start_surface_edge_idx + soft_body_b.surface_edge_count - 1].second == 
+        world.surface_edges_[soft_body_b.start_surface_edge_idx].first;
     
-    for (uint16_t i = 0; i < soft_body_a.surface_particle_count; ++i) 
+    for (uint16_t j = 0; j < soft_body_b.surface_edge_count; ++j)
     {
-        const auto particle_idx = world.surface_particles_idx_[soft_body_a.start_surface_particle_idx + i];
-        const Vec2& particle_pos = world.particle_positions_[particle_idx];
+        const auto edge_idx = soft_body_b.start_surface_edge_idx + j;
+        const auto [fst, snd] = world.surface_edges_[edge_idx];
+            
+        const Vec2 a_pos = world.particle_positions_[fst];
+        const Vec2 b_pos = world.particle_positions_[snd];
+            
+        Vec2 ab = b_pos - a_pos;
+        const float ab_len_sq = ab.LengthSquared();
+        if (ab_len_sq < 1e-6f) continue;
         
-        for (uint16_t j = 0; j < soft_body_b.surface_edge_count; ++j)
+        for (uint16_t i = 0; i < soft_body_a.surface_particle_count; ++i)
         {
             if (!Aabb::Overlap(body_a_particle_aabbs[i], body_b_edge_aabbs[j])) continue;
             
-            const auto edge_idx = soft_body_b.start_surface_edge_idx + j;
-            const auto edge = world.surface_edges_[edge_idx];
+            const auto particle_idx = world.surface_particles_idx_[soft_body_a.start_surface_particle_idx + i];
+            const Vec2& particle_pos = world.particle_positions_[particle_idx];
             
-            const Vec2& a_pos = world.particle_positions_[edge.first];
-            const Vec2& b_pos = world.particle_positions_[edge.second];
-
-            Vec2 ab = b_pos - a_pos;
-            const float ab_len_sq = ab.LengthSquared();
-            if (ab_len_sq < 1e-6f) continue;
-
             const float t = (particle_pos - a_pos).Dot(ab) / ab_len_sq;
             if (t < 0.f || t > 1.f) continue;
             
             Vec2 proj = a_pos + ab * t;
             Vec2 diff = particle_pos - proj;
-
+            
             const float dist_sq = diff.LengthSquared();
-            if (dist_sq > total_thickness_sq) continue;
+            if (dist_sq > total_thickness_sq || dist_sq < 1e-6f) continue;
             
             Vec2 normal;
             if (is_b_closed)
@@ -576,26 +539,19 @@ uint32_t CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& wo
             else
             {
                 const float dist = std::sqrt(dist_sq);
-                normal = dist > 1e-6f ? diff / dist : Vec2{0.f, 1.f};
+                normal = diff / dist;
             }
             
-            out_contacts[write_offset++] = XpbdParticleEdgeCollisionConstraint{normal, particle_idx, 
-                edge.first, edge.second, t};
+            out_contacts.emplace_back(normal, particle_idx, fst, snd, t);
         }
     }
-    
-    return write_offset;
 }
 
-void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world,
-    const std::pmr::vector<std::pair<uint32_t, uint32_t>>& pairs)
+void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world, const std::pmr::vector<std::pair<uint32_t, uint32_t>>& pairs)
 {
-    const size_t num_pairs = pairs.size();
+    const uint32_t num_pairs = pairs.size();
     if (num_pairs == 0) return;
-    
-    auto index_range = std::views::iota(size_t{0}, num_pairs);
-    std::pmr::vector<uint32_t> counts(num_pairs, 0, &world.frame_arena_);
-    
+
     auto get_body_particle_aabbs = [&](const SoftBodyHandle& body) -> std::span<const Aabb> {
         return std::span<const Aabb>(world.surface_particle_aabbs_).subspan(body.start_surface_particle_idx, body.surface_particle_count);
     };
@@ -604,52 +560,55 @@ void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world,
         return std::span<const Aabb>(world.surface_edge_aabbs_).subspan(body.start_surface_edge_idx, body.surface_edge_count);
     };
     
-    // Calculate how many contact each pair has.
-    std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(), [&](const size_t i) {
-        const auto& body_a_handle = world.soft_body_handles_[pairs[i].first];
-        const auto& body_b_handle = world.soft_body_handles_[pairs[i].second];
-        
-        auto a_particle_aabbs = get_body_particle_aabbs(body_a_handle);
-        auto b_particle_aabbs = get_body_particle_aabbs(body_b_handle);
-        auto a_edge_aabbs     = get_body_edge_aabbs(body_a_handle);
-        auto b_edge_aabbs     = get_body_edge_aabbs(body_b_handle);
-        
-        counts[i] = CountParticleEdgeCollisions(world, body_a_handle, body_b_handle, a_particle_aabbs, b_edge_aabbs)
-                    + CountParticleEdgeCollisions(world, body_b_handle, body_a_handle, b_particle_aabbs, a_edge_aabbs);
-    });
-
-    // Calculate the Prefix Sum to obtain the Offset for each Task written to `world.particle_edge_contacts_`.
-    std::pmr::vector<uint32_t> offsets(num_pairs, &world.frame_arena_);
-    std::exclusive_scan(std::execution::par_unseq, counts.begin(), counts.end(), offsets.begin(), 0u);
-
-    const uint32_t total_contacts = offsets.back() + counts.back();
-    if (total_contacts == 0) return;
+    // Maintain historical peak capacity
+    static uint32_t estimated_capacity = 4096;
+    const uint32_t required_capacity = std::max(num_pairs * 16, estimated_capacity);
     
-    world.particle_edge_contacts_.resize(total_contacts);
-
-    auto fill_contacts = [&](const size_t i) {
-        if (counts[i] <= 0) return;
-        
-        const auto& body_a_handle = world.soft_body_handles_[pairs[i].first];
-        const auto& body_b_handle = world.soft_body_handles_[pairs[i].second];
-        
-        auto a_particle_aabbs = get_body_particle_aabbs(body_a_handle);
-        auto b_particle_aabbs = get_body_particle_aabbs(body_b_handle);
-        auto a_edge_aabbs     = get_body_edge_aabbs(body_a_handle);
-        auto b_edge_aabbs     = get_body_edge_aabbs(body_b_handle);
-        
-        const uint32_t current_offset = offsets[i];
-        XpbdParticleEdgeCollisionConstraint* write_ptr = world.particle_edge_contacts_.data() + current_offset;
-        
-        const uint32_t written_a_vs_b = CheckParticleEdgeCollision(world, body_a_handle, body_b_handle, a_particle_aabbs, b_edge_aabbs, write_ptr);
-        CheckParticleEdgeCollision(world, body_b_handle, body_a_handle, b_particle_aabbs, a_edge_aabbs, write_ptr + written_a_vs_b);
-    };
-    
-    // Parallel direct filling into the `world.particle_edge_contacts_`
-    if (world.is_multi_thread_){
-        std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(), fill_contacts);
+    if (world.particle_edge_contacts_.capacity() < required_capacity) {
+        world.particle_edge_contacts_.reserve(required_capacity);
     }
-    else{
+    
+    world.particle_edge_contacts_.resize(required_capacity);
+
+    std::atomic<uint32_t> total_new_contacts{0};
+    auto index_range = std::views::iota(uint32_t{0}, num_pairs);
+
+    auto fill_contacts = [&](const uint32_t i) {
+        thread_local std::vector<XpbdParticleEdgeCollisionConstraint> local_contacts;
+        local_contacts.clear(); 
+
+        const auto& body_a_handle = world.soft_body_handles_[pairs[i].first];
+        const auto& body_b_handle = world.soft_body_handles_[pairs[i].second];
+
+        const auto a_particle_aabbs = get_body_particle_aabbs(body_a_handle);
+        const auto b_particle_aabbs = get_body_particle_aabbs(body_b_handle);
+        const auto a_edge_aabbs     = get_body_edge_aabbs(body_a_handle);
+        const auto b_edge_aabbs     = get_body_edge_aabbs(body_b_handle);
+        
+        CheckParticleEdgeCollision(world, body_a_handle, body_b_handle, a_particle_aabbs, b_edge_aabbs, local_contacts);
+        CheckParticleEdgeCollision(world, body_b_handle, body_a_handle, b_particle_aabbs, a_edge_aabbs, local_contacts);
+
+        if (local_contacts.empty()) return;
+        
+        const uint32_t count = local_contacts.size();
+        const uint32_t write_idx = total_new_contacts.fetch_add(count, std::memory_order_relaxed);
+        
+        if (write_idx + count <= required_capacity) {
+            std::ranges::copy(local_contacts, world.particle_edge_contacts_.begin() + write_idx);
+        }
+    };
+
+    if (world.is_multi_thread_) {
+        std::for_each(std::execution::par, index_range.begin(), index_range.end(), fill_contacts);
+    } else {
         std::for_each(std::execution::seq, index_range.begin(), index_range.end(), fill_contacts);
     }
+
+    const uint32_t actual_new_contacts = total_new_contacts.load(std::memory_order_relaxed);
+    
+    // Adjust next estimated_capacity.
+    estimated_capacity = std::max(estimated_capacity, actual_new_contacts * 2);
+    
+    // Shrink `world.particle_edge_contacts_` back to the actual number of constraints
+    world.particle_edge_contacts_.resize(actual_new_contacts);
 }

@@ -392,7 +392,6 @@ void PhysicsWorld::Step(const float dt)
     using Clock = std::chrono::high_resolution_clock;
     using Duration = std::chrono::duration<double, std::milli>;
     profile_data_.Reset();
-    frame_arena_.release();
     
     constexpr int sub_steps = 4;
     const float sub_dt = dt / static_cast<float>(sub_steps);
@@ -403,6 +402,7 @@ void PhysicsWorld::Step(const float dt)
     
     for (int sub_step = 0; sub_step < sub_steps; ++sub_step)
     {
+        frame_arena_.release();
         particle_rigid_contacts_.clear();
         particle_edge_contacts_.clear();
         
