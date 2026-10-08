@@ -1,9 +1,12 @@
 #pragma once
 #include <algorithm>
+#include <memory_resource>
 #include <vector>
+#include <span>
 
 #include "types.h"
 
+class CollisionNarrowPhase;
 class CollisionDetectionSystem;
 struct Rot;
 class PhysicsWorld;
@@ -12,7 +15,40 @@ class CollisionBroadPhase
 {
 private:
     static void BuildWorldBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_space_aabbs);
-    static uint32_t BuildBvhRecursive(PhysicsWorld& world, std::pmr::vector<Item>& items, const std::pmr::vector<Aabb>& world_space_aabbs, std::vector<BvhNode>& bvh_nodes, int start, int end);
+    static void BuildSubBvh(std::span<const Aabb> world_space_aabbs, std::pmr::vector<BvhNode>& sub_bvh_nodes);
+    
+    template <typename T, typename Alloc>
+    static uint32_t BuildBvhRecursive(std::span<Item> items, std::span<const Aabb> world_space_aabbs, std::vector<T, Alloc>& bvh_nodes, int start, int end)
+    {
+        // Index of current node.
+        const uint32_t node_index = bvh_nodes.size();
+    
+        // Place a placeholder in bvh_tree_nodes_.
+        bvh_nodes.emplace_back();
+
+        const int count = end - start;
+    
+        // Leaf node.
+        if (count == 1)
+        {
+            bvh_nodes[node_index].aabb = world_space_aabbs[items[start].id];
+            bvh_nodes[node_index].leaf_id = items[start].id;
+            return node_index;
+        }
+    
+        // Find the median and divide in half.
+        const int mid = start + count / 2;
+    
+        const uint32_t left_node_index = BuildBvhRecursive(items, world_space_aabbs, bvh_nodes, start, mid);
+        const uint32_t right_node_index = BuildBvhRecursive(items, world_space_aabbs, bvh_nodes, mid, end);
+    
+        bvh_nodes[node_index].aabb = Aabb::Combine(bvh_nodes[left_node_index].aabb, bvh_nodes[right_node_index].aabb);
+        bvh_nodes[node_index].left_child = left_node_index;
+        bvh_nodes[node_index].right_child = right_node_index;
+    
+        return node_index;
+    }
+    
     static void QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
     static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, Rot rot, const Aabb& local_aabb);
     
@@ -46,4 +82,5 @@ private:
     static void CleanupStaleManifolds(PhysicsWorld& world);
     
     friend CollisionDetectionSystem;
+    friend CollisionNarrowPhase;
 };

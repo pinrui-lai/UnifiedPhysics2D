@@ -53,7 +53,6 @@ void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::pmr::vector<Aa
          world_space_aabbs[idx] = {
             min_x - physics_config::kTwoParticlesThickness, min_y - physics_config::kTwoParticlesThickness,
             max_x + physics_config::kTwoParticlesThickness, max_y + physics_config::kTwoParticlesThickness};
-        
     });
     
     // Get Scene Bounding Box (boundary of all bodies in the world).
@@ -85,39 +84,40 @@ void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::pmr::vector<Aa
     // Sort by morton code.
     std::ranges::sort(items, {}, &Item::morton_code);
     
-    world.bvh_tree_root_index_ = BuildBvhRecursive(world, items, world_space_aabbs, world.bvh_tree_nodes_, 0, items.size());
+    world.bvh_tree_root_index_ = BuildBvhRecursive(items, world_space_aabbs, world.bvh_tree_nodes_, 0, items.size());
 }
 
-uint32_t CollisionBroadPhase::BuildBvhRecursive(PhysicsWorld& world, std::pmr::vector<Item>& items,
-    const std::pmr::vector<Aabb>& world_space_aabbs, std::vector<BvhNode>& bvh_nodes, const int start, const int end)
+void CollisionBroadPhase::BuildSubBvh(std::span<const Aabb> world_space_aabbs, std::pmr::vector<BvhNode>& sub_bvh_nodes)
 {
-    // Index of current node.
-    const uint32_t node_index = bvh_nodes.size();
+    sub_bvh_nodes.clear();
+    sub_bvh_nodes.reserve(world_space_aabbs.size() * 2);
     
-    // Place a placeholder in bvh_tree_nodes_.
-    bvh_nodes.emplace_back();
-
-    const int count = end - start;
-    
-    // Leaf node.
-    if (count == 1)
-    {
-        bvh_nodes[node_index].aabb = world_space_aabbs[items[start].id];
-        bvh_nodes[node_index].leaf_id = items[start].id;
-        return node_index;
+    // Get Scene Bounding Box (boundary of all bodies in the world).
+    Aabb scene_aabb = world_space_aabbs[0];
+    for (const auto& world_aabb : world_space_aabbs) {
+        scene_aabb = Aabb::Combine(scene_aabb, world_aabb);
     }
     
-    // Find the median and divide in half.
-    const int mid = start + count / 2;
+    const float inv_scene_aabb_width = 1 / (scene_aabb.max_x - scene_aabb.min_x);
+    const float inv_scene_aabb_height = 1 / (scene_aabb.max_y - scene_aabb.min_y);
     
-    const uint32_t left_node_index = BuildBvhRecursive(world, items, world_space_aabbs, bvh_nodes, start, mid);
-    const uint32_t right_node_index = BuildBvhRecursive(world, items, world_space_aabbs, bvh_nodes, mid, end);
+    // Get Morton Code and create sort item.
+    // std::pmr::vector<Item> items(world_space_aabbs.size(), frame_arena_);
+    thread_local  std::vector<Item> items;
+    items.resize(world_space_aabbs.size());
     
-    bvh_nodes[node_index].aabb = Aabb::Combine(bvh_nodes[left_node_index].aabb, bvh_nodes[right_node_index].aabb);
-    bvh_nodes[node_index].left_child = left_node_index;
-    bvh_nodes[node_index].right_child = right_node_index;
+    auto index_range = std::views::iota(uint16_t{0}, static_cast<uint16_t>(world_space_aabbs.size()));
+    std::for_each(std::execution::seq, index_range.begin(), index_range.end(), [&](const auto i)
+    {
+        auto& [min_x, min_y, max_x, max_y] = world_space_aabbs[i];
+        const auto center = Vec2{(max_x - min_x) * 0.5f, (max_y - min_y) * 0.5f};
+        items[i] = {i, GetMortonCode(center, scene_aabb.min_x, scene_aabb.min_y, inv_scene_aabb_width, inv_scene_aabb_height)};
+    });
     
-    return node_index;
+    // Sort by morton code.
+    std::ranges::sort(items, {}, &Item::morton_code);
+    
+    BuildBvhRecursive(items, world_space_aabbs, sub_bvh_nodes, 0, items.size());
 }
 
 void CollisionBroadPhase::QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs,

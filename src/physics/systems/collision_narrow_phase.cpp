@@ -3,6 +3,7 @@
 #include <ranges>
 
 #include "collision_narrow_phase.h"
+#include "collision_broad_phase.h"
 #include "physics_world.h"
 
 namespace 
@@ -142,7 +143,8 @@ void CollisionNarrowPhase::Gjk(PhysicsWorld& world, Manifold& manifold)
     reset_manifold();
 }
 
-std::pair<Vec2, float> CollisionNarrowPhase::Epa(const PhysicsWorld& world, const FixedSimplex& simplex, const Manifold& manifold)
+std::pair<Vec2, float> CollisionNarrowPhase::Epa(const PhysicsWorld& world, const FixedSimplex& simplex,
+    const Manifold& manifold)
 {
     FixedPolytope polytope;
     for (uint8_t i = 0; i < simplex.size(); ++i)
@@ -444,7 +446,7 @@ void CollisionNarrowPhase::CheckRigidParticleCollision(PhysicsWorld& world, uint
 
 void CollisionNarrowPhase::UpdateParticleEdgeAabbs(PhysicsWorld& world, const std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts)
 {
-    const size_t num_bodies = world.soft_body_handles_.size();
+    const uint32_t num_bodies = world.soft_body_handles_.size();
     if (num_bodies == 0 || soft_soft_contacts.empty()) return;
     
     // Mark soft bodies whose AABB overlaps with others.
@@ -454,15 +456,16 @@ void CollisionNarrowPhase::UpdateParticleEdgeAabbs(PhysicsWorld& world, const st
         is_body_active[b_idx] = 1;
     }
 
-    const size_t total_surface_particles = world.surface_particles_idx_.size();
-    const size_t total_surface_edges = world.surface_edges_.size();
+    const uint32_t total_surface_particles = world.surface_particles_idx_.size();
+    const uint32_t total_surface_edges = world.surface_edges_.size();
     
     world.surface_particle_aabbs_.resize(total_surface_particles);
     world.surface_edge_aabbs_.resize(total_surface_edges);
+    world.soft_body_surface_particle_bvhs_.resize(num_bodies);
     
     // Update the AABB only for soft bodies marked as Active.
-    auto body_range = std::views::iota(size_t{0}, num_bodies);
-    std::for_each(std::execution::par_unseq, body_range.begin(), body_range.end(), [&](size_t body_idx) {
+    auto body_range = std::views::iota(uint32_t{0}, num_bodies);
+    std::for_each(std::execution::par, body_range.begin(), body_range.end(), [&](size_t body_idx) {
         if (!is_body_active[body_idx]) return;
 
         const auto& body = world.soft_body_handles_[body_idx];
@@ -493,16 +496,23 @@ void CollisionNarrowPhase::UpdateParticleEdgeAabbs(PhysicsWorld& world, const st
                 std::max(a_pos.y, b_pos.y) + physics_config::kTwoParticlesThickness
             };
         }
+        
+        // Update soft body edge BVH
+        if (body.surface_particle_count > physics_config::kSubBvhThreshold){
+            CollisionBroadPhase::BuildSubBvh(std::span(world.surface_particle_aabbs_).subspan(
+                body.start_surface_particle_idx, body.surface_particle_count), world.soft_body_surface_particle_bvhs_[body_idx]);    
+        }
     });
 }
 
-void CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b,
-    std::span<const Aabb> body_a_particle_aabbs, std::span<const Aabb> body_b_edge_aabbs, std::vector<XpbdParticleEdgeCollisionConstraint>& out_contacts)
+void CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b, std::span<const Aabb> body_b_edge_aabbs,
+    std::span<const Aabb> body_a_particle_aabbs, const std::span<BvhNode> body_a_surface_particle_bvh, std::vector<XpbdParticleEdgeCollisionConstraint>& out_contacts)
 {
     constexpr float total_thickness_sq = physics_config::kTwoParticlesThickness * physics_config::kTwoParticlesThickness;
     const bool is_b_closed = world.surface_edges_[soft_body_b.start_surface_edge_idx + soft_body_b.surface_edge_count - 1].second == 
         world.surface_edges_[soft_body_b.start_surface_edge_idx].first;
     
+    uint32_t stack[32];
     for (uint16_t j = 0; j < soft_body_b.surface_edge_count; ++j)
     {
         const auto edge_idx = soft_body_b.start_surface_edge_idx + j;
@@ -515,34 +525,60 @@ void CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world,
         const float ab_len_sq = ab.LengthSquared();
         if (ab_len_sq < 1e-6f) continue;
         
-        for (uint16_t i = 0; i < soft_body_a.surface_particle_count; ++i)
-        {
-            if (!Aabb::Overlap(body_a_particle_aabbs[i], body_b_edge_aabbs[j])) continue;
-            
-            const auto particle_idx = world.surface_particles_idx_[soft_body_a.start_surface_particle_idx + i];
+        uint32_t stack_ptr = 0;
+        stack[stack_ptr++] = 0;
+        
+        auto check_and_add_contact = [&](const uint32_t local_particle_idx) {
+            const auto particle_idx = world.surface_particles_idx_[soft_body_a.start_surface_particle_idx + local_particle_idx];
             const Vec2& particle_pos = world.particle_positions_[particle_idx];
-            
+
             const float t = (particle_pos - a_pos).Dot(ab) / ab_len_sq;
-            if (t < 0.f || t > 1.f) continue;
-            
-            Vec2 proj = a_pos + ab * t;
-            Vec2 diff = particle_pos - proj;
-            
+            if (t < 0.f || t > 1.f) return;
+
+            const Vec2 proj = a_pos + ab * t;
+            const Vec2 diff = particle_pos - proj;
+
             const float dist_sq = diff.LengthSquared();
-            if (dist_sq > total_thickness_sq || dist_sq < 1e-6f) continue;
-            
-            Vec2 normal;
-            if (is_b_closed)
-            {
-                normal = ab.Normal();
-            }
-            else
-            {
-                const float dist = std::sqrt(dist_sq);
-                normal = diff / dist;
-            }
-            
+            if (dist_sq > total_thickness_sq || dist_sq < 1e-6f) return;
+
+            const Vec2 normal = is_b_closed ? ab.Normal() : (diff / std::sqrt(dist_sq));
+
             out_contacts.emplace_back(normal, particle_idx, fst, snd, t);
+        };
+        
+        if (soft_body_a.surface_particle_count > physics_config::kSubBvhThreshold )
+        {
+            // Traverse BVH
+            while (stack_ptr > 0)
+            {
+                const uint32_t curr = stack[--stack_ptr];
+                const auto& node = body_a_surface_particle_bvh[curr];
+            
+                if (!Aabb::Overlap(node.aabb, body_b_edge_aabbs[j]))
+                {
+                    continue;
+                }
+
+                if (node.IsLeaf())
+                {
+                    check_and_add_contact(node.leaf_id);
+                }
+                else
+                {
+                    stack[stack_ptr++] = node.left_child;
+                    stack[stack_ptr++] = node.right_child;
+                }
+            }
+        }
+        else
+        {
+            // Brute Force
+            for (uint16_t i = 0; i < soft_body_a.surface_particle_count; ++i)
+            {
+                if (!Aabb::Overlap(body_a_particle_aabbs[i], body_b_edge_aabbs[j])) continue;
+            
+                check_and_add_contact(i);
+            }
         }
     }
 }
@@ -579,14 +615,16 @@ void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world, const std
 
         const auto& body_a_handle = world.soft_body_handles_[pairs[i].first];
         const auto& body_b_handle = world.soft_body_handles_[pairs[i].second];
-
+        
+        const auto a_edge_aabbs = get_body_edge_aabbs(body_a_handle);
+        const auto b_edge_aabbs = get_body_edge_aabbs(body_b_handle);
         const auto a_particle_aabbs = get_body_particle_aabbs(body_a_handle);
         const auto b_particle_aabbs = get_body_particle_aabbs(body_b_handle);
-        const auto a_edge_aabbs     = get_body_edge_aabbs(body_a_handle);
-        const auto b_edge_aabbs     = get_body_edge_aabbs(body_b_handle);
+        auto& body_a_surface_particle_bvh = world.soft_body_surface_particle_bvhs_[pairs[i].first];
+        auto& body_b_surface_particle_bvh = world.soft_body_surface_particle_bvhs_[pairs[i].second];
         
-        CheckParticleEdgeCollision(world, body_a_handle, body_b_handle, a_particle_aabbs, b_edge_aabbs, local_contacts);
-        CheckParticleEdgeCollision(world, body_b_handle, body_a_handle, b_particle_aabbs, a_edge_aabbs, local_contacts);
+        CheckParticleEdgeCollision(world, body_a_handle, body_b_handle, b_edge_aabbs, a_particle_aabbs, body_a_surface_particle_bvh, local_contacts);
+        CheckParticleEdgeCollision(world, body_b_handle, body_a_handle, a_edge_aabbs, b_particle_aabbs, body_b_surface_particle_bvh, local_contacts);
 
         if (local_contacts.empty()) return;
         
@@ -609,6 +647,6 @@ void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world, const std
     // Adjust next estimated_capacity.
     estimated_capacity = std::max(estimated_capacity, actual_new_contacts * 2);
     
-    // Shrink `world.particle_edge_contacts_` back to the actual number of constraints
+    // Shrink `world.particle_edge_contacts_` back to the actual number of constraints.
     world.particle_edge_contacts_.resize(actual_new_contacts);
 }

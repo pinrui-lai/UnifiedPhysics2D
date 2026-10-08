@@ -63,8 +63,8 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     world.profile_data_.rigid_soft_ms += Duration(Clock::now() - start).count();
     
     // Soft vs Soft.
-    start = Clock::now();
     CollisionNarrowPhase::UpdateParticleEdgeAabbs(world, soft_soft_contacts);
+    start = Clock::now();
     CollisionNarrowPhase::CheckSoftSoftCollision(world, soft_soft_contacts);
     world.profile_data_.soft_soft_ms += Duration(Clock::now() - start).count();
     

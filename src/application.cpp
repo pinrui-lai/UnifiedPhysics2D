@@ -19,10 +19,10 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
 
     // XPBD soft rope.
     Vec2 rope_start_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f} * physics_config::kMpp;
-    rope_start_pos.x -= 7.f;
+    rope_start_pos.x -= 9.f;
     rope_start_pos.y += 5.f;
-    const Vec2 rope_end_pos{rope_start_pos.x + 9.f, rope_start_pos.y};
-    world.CreateRope(rope_start_pos, rope_end_pos, 40,  20, 0.5f, 0.0005f, true, true);
+    const Vec2 rope_end_pos{rope_start_pos.x + 12.f, rope_start_pos.y};
+    world.CreateRope(rope_start_pos, rope_end_pos, physics_config::kSubBvhThreshold + 1,  20, 0.5f, 0.00001f, true, true);
     
     // Floating obstacle Bodies.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) - 700.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
@@ -270,6 +270,10 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         RenderBvhDebug(world.GetBvhNodes(), 0, bvh_draw_max_depth_, float_h);
     }
     
+    if (draw_first_rope_bvh_) {
+        RenderBvhDebug(world.GetInitRopeBvhNodes(), 0, bvh_draw_max_depth_, float_h);
+    }
+    
     RenderPhysicsControlPanel(window, world, w, Duration(Clock::now() - start).count());
     
     ImGui::Render();
@@ -434,7 +438,8 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Checkbox("Draw Contact Info", &world.show_debug_contact_points_);
     ImGui::Checkbox("Draw IncidentEdge & ReferenceEdge(multi-thread only)", &world.show_debug_clipping_);
     ImGui::Text("BVH :");
-    ImGui::Checkbox("Draw BVH", &draw_bvh_);
+    ImGui::Checkbox("Draw Global BVH", &draw_bvh_);
+    ImGui::Checkbox("Draw first Rope Particle BVH(Particle BVH is only\nupdated when it collides with another soft body)", &draw_first_rope_bvh_);
     ImGui::SliderInt("BVH Draw Depth", &bvh_draw_max_depth_, 0, 20);
     ImGui::Checkbox("Draw Surface Particle of Soft Body", &draw_surface_particle_);
     ImGui::Unindent(indent_len);
@@ -525,7 +530,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SameLine();
         ImGui::Checkbox("Horizontal", &is_horizontal_);
         ImGui::SliderFloat("Length##rope", &rope_spawn_length_, 1.0f, 30.0f);
-        ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 1, 100);
+        ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 1, 128);
         ImGui::SliderFloat("Mass##rope", &rope_spawn_mass_, 0.1f, 100.0f);
         ImGui::SliderFloat("Friction##rope", &rope_spawn_friction_, 0.0f, 1.0f);
         ImGui::SliderFloat("Compliance##rope", &rope_spawn_compliance_, 0.0f, 0.005f, "%.7f");
@@ -547,7 +552,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SameLine();
         ImGui::Text("Triangle Area Soft Circle");
         ImGui::SliderFloat("Radius##scircle", &soft_circle_spawn_radius_, 0.5f, 10.0f);
-        ImGui::SliderInt("Segments##scircle", &soft_circle_spawn_num_segments_, 3, 60);
+        ImGui::SliderInt("Segments##scircle", &soft_circle_spawn_num_segments_, 3, 128);
         ImGui::SliderFloat("Mass##scircle", &soft_circle_spawn_mass_, 0.1f, 100.0f);
         ImGui::SliderFloat("Friction##scircle", &soft_circle_spawn_friction_, 0.0f, 1.0f);
         ImGui::SliderFloat("Compliance##scircle", &soft_circle_spawn_compliance_, 0.0f, 0.005f, "%.7f");
@@ -557,7 +562,7 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SameLine();
         ImGui::Text("Pressure Soft Circle");
         ImGui::SliderFloat("Radius##pcircle", &pressure_circle_spawn_radius_, 0.5f, 10.0f);
-        ImGui::SliderInt("Segments##pcircle", &pressure_circle_spawn_num_segments_, 3, 60);
+        ImGui::SliderInt("Segments##pcircle", &pressure_circle_spawn_num_segments_, 3, 128);
         ImGui::SliderFloat("Mass##pcircle", &pressure_circle_spawn_mass_, 0.0f, 100.0f);
         ImGui::SliderFloat("Friction##pcircle", &pressure_circle_spawn_friction_, 0.0f, 1.0f);
         ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.0f, 0.001f, "%.7f");
@@ -579,8 +584,8 @@ ImU32 Application::GetDepthColor(const int depth, const float alpha)
     return ImColor(r, g, b, alpha);
 }
 
-void Application::DrawBvhNode(ImDrawList* draw_list, const std::vector<BvhNode>& nodes, const int node_idx, const int current_depth,
-    const int max_render_depth, int& hovered_node_idx, const float window_height)
+void Application::DrawBvhNode(ImDrawList* draw_list, const std::span<BvhNode> nodes, const int node_idx, const int current_depth,
+                              const int max_render_depth, int& hovered_node_idx, const float window_height)
 {
     if (node_idx >= static_cast<int>(nodes.size())) return;
     if (current_depth > max_render_depth) return;
@@ -619,7 +624,7 @@ void Application::DrawBvhNode(ImDrawList* draw_list, const std::vector<BvhNode>&
     }
 }
 
-void Application::RenderBvhDebug(const std::vector<BvhNode>& nodes, const int root_idx, const int max_render_depth, const float window_height)
+void Application::RenderBvhDebug(const std::span<BvhNode> nodes, const int root_idx, const int max_render_depth, const float window_height)
 {
     ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
     

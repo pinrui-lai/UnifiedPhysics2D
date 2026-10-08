@@ -90,6 +90,7 @@ private:
     std::vector<XpbdParticleEdgeCollisionConstraint> particle_edge_contacts_;
     std::vector<Aabb> surface_particle_aabbs_;
     std::vector<Aabb> surface_edge_aabbs_;
+    std::vector<std::pmr::vector<BvhNode>> soft_body_surface_particle_bvhs_;
     
     std::vector<std::byte> buffer_;
     std::pmr::monotonic_buffer_resource frame_arena_;
@@ -122,7 +123,7 @@ public:
     const std::vector<Rot>& GetRots() { return rots_; }
     const std::vector<Shape>& GetShapes() { return shapes_; }
     const std::vector<Vec2>& GetVertices() { return vertices_; }
-    const std::vector<BvhNode>& GetBvhNodes() { return bvh_tree_nodes_; }
+    const std::span<BvhNode> GetBvhNodes() { return bvh_tree_nodes_; }
     const std::vector<Manifold>& GetManifolds() { return manifolds_; }
     const std::vector<Vec2>& GetParticlePositions() { return particle_positions_; }
     const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
@@ -132,6 +133,11 @@ public:
     auto GetParticleEdgeContactsSize() const { return particle_edge_contacts_.size(); }
     static std::array<Vec2, 4> GetBodyVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i);
     static std::vector<Vec2> GetBodyVertices(const PhysicsWorld& world, const PolygonShape& polygon_shape, uint32_t i);
+    const std::span<BvhNode>& GetInitRopeBvhNodes()
+    {
+        if (soft_body_surface_particle_bvhs_.empty()) return std::span<BvhNode>{};
+        return soft_body_surface_particle_bvhs_[0];
+    }
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }
     void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id].val = angular_vel; }
