@@ -1,26 +1,28 @@
-#include "xpbd_solver_system.h"
-
 #include <algorithm>
+#include <execution>
+#include <ranges>
 
 #include "physics_world.h"
+#include "xpbd_solver_system.h"
 
 void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
 {
     const uint32_t count = world.particle_positions_.size();
 
-    for (uint32_t i = 0; i < count; ++i)
+    auto index_range = std::views::iota(uint32_t{0}, count);
+    std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(),[&](auto i)
     {
-        if (world.particle_inv_masses_[i] == 0.0f) continue;
-
+        if (world.particle_inv_masses_[i] == 0.0f) return;
+    
         world.particle_prev_positions_[i] = world.particle_positions_[i];
-        
-        Vec2 accel = world.particle_forces_[i] * world.particle_inv_masses_[i];
+    
+        const Vec2 accel = world.particle_forces_[i] * world.particle_inv_masses_[i];
         world.particle_velocities_[i] += accel * sdt;
         
         world.particle_positions_[i] += world.particle_velocities_[i] * sdt;
             
         world.particle_forces_[i] = Vec2{0.0f, 0.0f};
-    }
+    });
 }
 
 void XpbdSolver::SolveDistanceConstraint(PhysicsWorld& world, const float inv_sdt_sq, XpbdDistanceConstraint& c)
@@ -275,11 +277,13 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
 void XpbdSolver::FinalizeParticles(PhysicsWorld& world, const float inv_sdt)
 {
     const uint32_t count = world.particle_positions_.size();
-    for (uint32_t i = 0; i < count; ++i)
+    
+    auto index_range = std::views::iota(uint32_t{0}, count);
+    std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(),[&](auto i)
     {
-        if (world.particle_inv_masses_[i] == 0.0f) continue;
-
+        if (world.particle_inv_masses_[i] == 0.0f) return;
+    
         // Update the velocity based on the position correction.
         world.particle_velocities_[i] = (world.particle_positions_[i] - world.particle_prev_positions_[i]) * inv_sdt;
-    }
+    });
 }
