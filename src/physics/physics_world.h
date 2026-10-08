@@ -82,13 +82,12 @@ private:
     std::vector<float> particle_frictions_;
     std::vector<Vec2> particle_forces_;
     std::vector<std::pair<uint32_t, uint32_t>> surface_edges_;
-    std::vector<uint32_t> surface_particles_idx_;
     std::vector<XpbdDistanceConstraint> distance_constraints_;
     std::vector<XpbdTriangleAreaConstraint> triangle_area_constraints_;
     std::vector<XpbdGlobalAreaConstraint> global_area_constraints_;
     std::vector<XpbdContactConstraint> particle_rigid_contacts_;
     std::vector<XpbdParticleEdgeCollisionConstraint> particle_edge_contacts_;
-    std::vector<Aabb> surface_particle_aabbs_;
+    std::vector<Aabb> particle_aabbs_;
     std::vector<Aabb> surface_edge_aabbs_;
     std::vector<std::pmr::vector<BvhNode>> soft_body_surface_particle_bvhs_;
     
@@ -128,7 +127,6 @@ public:
     const std::vector<Vec2>& GetParticlePositions() { return particle_positions_; }
     const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
     const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
-    const std::vector<uint32_t>& GetSurfaceParticlesIdx() { return surface_particles_idx_; }
     auto GetParticleRigidContactsSize() const { return particle_rigid_contacts_.size(); }
     auto GetParticleEdgeContactsSize() const { return particle_edge_contacts_.size(); }
     static std::array<Vec2, 4> GetBodyVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i);

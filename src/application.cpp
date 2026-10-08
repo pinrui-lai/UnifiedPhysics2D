@@ -165,11 +165,9 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
 
     const auto& positions = world.GetPositions();
     const auto& rots = world.GetRots();
-    // const auto& vertices = world.GetVertices();
     const auto& shapes = world.GetShapes();
     const auto& particle_positions = world.GetParticlePositions();
-    const auto& surface_particles_idx = world.GetSurfaceParticlesIdx();
-    
+    const auto& soft_body_handles = world.GetSoftBodyHandles();
     // ==== Rigid Body ====
     for (int i = 0; i < shapes.size(); i++)
     {
@@ -224,10 +222,14 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     
     if (draw_surface_particle_)
     {
-        for (const auto& idx : surface_particles_idx)
+        for (const auto& soft_body_handle : soft_body_handles)
         {
-            ImVec2 pos{particle_positions[idx].x * physics_config::kPpm, float_h - particle_positions[idx].y * physics_config::kPpm};
-            draw_list->AddCircleFilled(pos, 5.0f, IM_COL32(255, 127, 0, 255));
+            for (uint16_t i = 0; i < soft_body_handle.surface_particle_count; i++)
+            {
+                const uint32_t idx = soft_body_handle.start_surface_particle_idx + i;
+                ImVec2 pos{particle_positions[idx].x * physics_config::kPpm, float_h - particle_positions[idx].y * physics_config::kPpm};
+                draw_list->AddCircleFilled(pos, 5.0f, IM_COL32(255, 127, 0, 255));
+            }
         }
     }
     

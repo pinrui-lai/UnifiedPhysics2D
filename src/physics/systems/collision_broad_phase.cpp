@@ -170,9 +170,9 @@ void CollisionBroadPhase::QueryBvh(PhysicsWorld& world, const std::pmr::vector<A
                 if (is_query_rigid)
                 {
                     const auto& soft_handle = world.soft_body_handles_[soft_idx];
-                    for (uint32_t i = soft_handle.start_surface_particle_idx; i < soft_handle.start_surface_particle_idx + soft_handle.surface_particle_count; ++i)
+                    for (uint32_t i = 0; i < soft_handle.surface_particle_count; ++i)
                     {
-                        const auto particle_idx = world.surface_particles_idx_[i]; // Only detect surface particle of soft body
+                        const auto particle_idx = soft_handle.start_surface_particle_idx + i; // Only detect surface particle of soft body
                         rigid_soft_contacts.emplace_back(query_obj_idx, particle_idx);
                     }
                 }
