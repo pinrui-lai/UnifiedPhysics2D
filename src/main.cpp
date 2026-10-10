@@ -45,6 +45,9 @@ int main(int argc, char* argv[]) {
     while (is_running) {
         const Uint64 current_time = SDL_GetPerformanceCounter();
         float delta_time = static_cast<float>(current_time - last_time) / static_cast<float>(SDL_GetPerformanceFrequency());
+        
+        if (delta_time < 1e-6f) continue;
+        
         delta_time = std::min(max_delta_time, delta_time);
         last_time = current_time;
         
