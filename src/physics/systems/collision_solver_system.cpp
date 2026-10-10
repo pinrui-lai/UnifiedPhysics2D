@@ -1,7 +1,6 @@
-#include "collision_solver_system.h"
-
 #include <algorithm>
 
+#include "collision_solver_system.h"
 #include "components.h"
 #include "physics_world.h"
 

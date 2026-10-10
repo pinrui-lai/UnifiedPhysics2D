@@ -14,7 +14,7 @@ class PhysicsWorld;
 class CollisionBroadPhase
 {
 private:
-    static void BuildWorldBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_space_aabbs);
+    static void BuildWorldBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs);
     static void BuildSubBvh(std::span<const Aabb> world_space_aabbs, std::pmr::vector<BvhNode>& sub_bvh_nodes);
     
     template <typename T, typename Alloc>
@@ -49,7 +49,7 @@ private:
         return node_index;
     }
     
-    static void QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs, uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
+    static void QueryBvh(PhysicsWorld& world, std::span<Aabb> world_aabbs, uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
     static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, Rot rot, const Aabb& local_aabb);
     
     static uint32_t ExpandBits(uint32_t bits){

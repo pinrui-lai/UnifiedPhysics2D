@@ -16,13 +16,6 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     // Small body for debug (check contact info).
     // debug_circle_ = world.CreateCircle(Vec2{0.f, 0.f}, 0.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 0.2f, 1.f);
     // debug_box_ = world.CreateBox(Vec2{0.f, 0.f} * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f);
-
-    // XPBD soft rope.
-    Vec2 rope_start_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f} * physics_config::kMpp;
-    rope_start_pos.x -= 9.f;
-    rope_start_pos.y += 5.f;
-    const Vec2 rope_end_pos{rope_start_pos.x + 12.f, rope_start_pos.y};
-    world.CreateRope(rope_start_pos, rope_end_pos, physics_config::kSubBvhThreshold + 1,  20, 0.5f, 0.00001f, true, true);
     
     // Floating obstacle Bodies.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) - 700.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
@@ -63,6 +56,13 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     right_wall_ = world.CreateBox( right_wall_pos, 0.f,
         {0.f, 0.f}, 0.0f,
         0.f, 1.f, static_cast<float>(h) / 2 * physics_config::kMpp, boundary_restitution_, boundary_friction_);
+    
+    // XPBD soft rope.
+    Vec2 rope_start_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) / 2.f} * physics_config::kMpp;
+    rope_start_pos.x -= 9.f;
+    rope_start_pos.y += 5.f;
+    const Vec2 rope_end_pos{rope_start_pos.x + 12.f, rope_start_pos.y};
+    world.CreateRope(rope_start_pos, rope_end_pos, physics_config::kSubBvhThreshold + 1,  20, 0.5f, 0.00001f, true, true);
 }
 
 void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& world)
@@ -210,7 +210,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     for (const auto& particle_position : particle_positions)
     {
         ImVec2 pos{particle_position.x * physics_config::kPpm, float_h - particle_position.y * physics_config::kPpm};
-        draw_list->AddCircleFilled(pos, 5.0f, IM_COL32(255, 0, 0, 255));
+        draw_list->AddCircleFilled(pos, 4.f, IM_COL32(255, 0, 0, 255));
     }
     
     for (const auto& constraint : world.GetDistanceConstraints())
@@ -238,14 +238,14 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     {
         ImVec2 p0(incident_edge[0].x * physics_config::kPpm, float_h - incident_edge[0].y * physics_config::kPpm);
         ImVec2 p1(incident_edge[1].x * physics_config::kPpm, float_h - incident_edge[1].y * physics_config::kPpm);
-        draw_list->AddLine(p0, p1, IM_COL32(255, 0, 255, 255), 5.0f);
+        draw_list->AddLine(p0, p1, IM_COL32(20, 200, 10, 255), 5.0f);
     }
     
     for (const auto& reference_edge : world.debug_reference_edges_)
     {
         ImVec2 p0(reference_edge[0].x * physics_config::kPpm, float_h - reference_edge[0].y * physics_config::kPpm);
         ImVec2 p1(reference_edge[1].x * physics_config::kPpm, float_h - reference_edge[1].y * physics_config::kPpm);
-        draw_list->AddLine(p0, p1, IM_COL32(0, 255, 255, 255), 5.0f);
+        draw_list->AddLine(p0, p1, IM_COL32(0, 160, 240, 255), 5.0f);
     }
     
     if (world.show_debug_contact_points_)
@@ -263,7 +263,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
                 draw_list->AddLine(pt_a, pt_b, IM_COL32(255, 255, 0, 255), 5.0f);
             
                 // Draw collision point a.
-                draw_list->AddCircleFilled(pt_a, 5.0f, IM_COL32(0, 255, 0, 255));
+                draw_list->AddCircleFilled(pt_a, 5.0f, IM_COL32(230, 230, 230, 255));
             }
         }    
     }
@@ -272,8 +272,11 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         RenderBvhDebug(world.GetBvhNodes(), 0, bvh_draw_max_depth_, float_h);
     }
     
-    if (draw_first_rope_bvh_) {
-        RenderBvhDebug(world.GetInitRopeBvhNodes(), 0, bvh_draw_max_depth_, float_h);
+    if (draw_sub_bvh_) {
+        for (const auto& sub_bvh : world.GetSubBvhs())
+        {
+            RenderBvhDebug(sub_bvh, 0, bvh_draw_max_depth_, float_h);    
+        }
     }
     
     RenderPhysicsControlPanel(window, world, w, Duration(Clock::now() - start).count());
@@ -436,14 +439,19 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Spacing();
     ImGui::SeparatorText("Debug Options:");
     ImGui::Indent(indent_len);
-    ImGui::Checkbox("Is Multi-Thread", &world.is_multi_thread_);
+    ImGui::Checkbox("Is Multi-Thread(Rigid-Rigid&Soft-Soft Narrow-Phase)", &world.is_multi_thread_);
     ImGui::Checkbox("Draw Contact Info", &world.show_debug_contact_points_);
     ImGui::Checkbox("Draw IncidentEdge & ReferenceEdge(multi-thread only)", &world.show_debug_clipping_);
+    ImGui::Checkbox("Draw Surface Particle of Soft Body", &draw_surface_particle_);
+    ImGui::Spacing();
     ImGui::Text("BVH :");
     ImGui::Checkbox("Draw Global BVH", &draw_bvh_);
-    ImGui::Checkbox("Draw first Rope Particle BVH(Particle BVH is only\nupdated when it collides with another soft body)", &draw_first_rope_bvh_);
+    ImGui::Checkbox("Draw Soft Body Surface Particle BVH (Only updated\nwhen it collides with another soft body & "
+                    "surface\nparticle count exceeds 100)", &draw_sub_bvh_);
     ImGui::SliderInt("BVH Draw Depth", &bvh_draw_max_depth_, 0, 20);
-    ImGui::Checkbox("Draw Surface Particle of Soft Body", &draw_surface_particle_);
+    ImGui::Spacing();
+    ImGui::Text("Arrow Key to apply force to all bodies :");
+    ImGui::SliderFloat("Arrow Key Force", &arrow_key_force_, 0, 2000.f);
     ImGui::Unindent(indent_len);
     
     ImGui::End();
@@ -586,7 +594,7 @@ ImU32 Application::GetDepthColor(const int depth, const float alpha)
     return ImColor(r, g, b, alpha);
 }
 
-void Application::DrawBvhNode(ImDrawList* draw_list, const std::span<BvhNode> nodes, const int node_idx, const int current_depth,
+void Application::DrawBvhNode(ImDrawList* draw_list, std::span<const BvhNode> nodes, const int node_idx, const int current_depth,
                               const int max_render_depth, int& hovered_node_idx, const float window_height)
 {
     if (node_idx >= static_cast<int>(nodes.size())) return;
@@ -626,7 +634,7 @@ void Application::DrawBvhNode(ImDrawList* draw_list, const std::span<BvhNode> no
     }
 }
 
-void Application::RenderBvhDebug(const std::span<BvhNode> nodes, const int root_idx, const int max_render_depth, const float window_height)
+void Application::RenderBvhDebug(std::span<const BvhNode> nodes, const int root_idx, const int max_render_depth, const float window_height)
 {
     ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
     

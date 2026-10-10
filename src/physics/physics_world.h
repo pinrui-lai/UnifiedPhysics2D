@@ -131,11 +131,7 @@ public:
     auto GetParticleEdgeContactsSize() const { return particle_edge_contacts_.size(); }
     static std::array<Vec2, 4> GetBodyVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i);
     static std::vector<Vec2> GetBodyVertices(const PhysicsWorld& world, const PolygonShape& polygon_shape, uint32_t i);
-    const std::span<BvhNode>& GetInitRopeBvhNodes()
-    {
-        if (soft_body_surface_particle_bvhs_.empty()) return std::span<BvhNode>{};
-        return soft_body_surface_particle_bvhs_[0];
-    }
+    const std::vector<std::pmr::vector<BvhNode>>& GetSubBvhs(){return soft_body_surface_particle_bvhs_;}
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }
     void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id].val = angular_vel; }

@@ -1,6 +1,5 @@
 #pragma once
 #include <span>
-#include <vector>
 
 #include "types.h"
 
@@ -28,8 +27,8 @@ public:
     void ResetWorld(SDL_Window* window, PhysicsWorld& world);
     
     static ImU32 GetDepthColor(int depth, float alpha = 1.0f);
-    static void DrawBvhNode(ImDrawList* draw_list, std::span<BvhNode> nodes, int node_idx, int current_depth, int max_render_depth, int& hovered_node_idx, float window_height);
-    static void RenderBvhDebug(std::span<BvhNode> nodes, int root_idx, int max_render_depth, float window_height);
+    static void DrawBvhNode(ImDrawList* draw_list, std::span<const BvhNode> nodes, int node_idx, int current_depth, int max_render_depth, int& hovered_node_idx, float window_height);
+    static void RenderBvhDebug(std::span<const BvhNode> nodes, int root_idx, int max_render_depth, float window_height);
     static ImVec2 GetAabbCenter(const Aabb& aabb) { return ImVec2((aabb.min_x + aabb.max_x) * 0.5f, (aabb.min_y + aabb.max_y) * 0.5f); }
     static bool AabbContains(const Aabb& aabb, const ImVec2 p) { return p.x >= aabb.min_x && p.x <= aabb.max_x && p.y >= aabb.min_y && p.y <= aabb.max_y; }
     
@@ -113,5 +112,5 @@ private:
     bool draw_bvh_{false};
     int bvh_draw_max_depth_{5};
     bool draw_surface_particle_{false};
-    bool draw_first_rope_bvh_{false};
+    bool draw_sub_bvh_{false};
 };

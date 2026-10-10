@@ -4,7 +4,7 @@
 #include "collision_broad_phase.h"
 #include "physics_world.h"
 
-void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::pmr::vector<Aabb>& world_space_aabbs)
+void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs)
 {
     const uint32_t rigid_count = world.positions_.size();
     const uint32_t soft_count = world.soft_body_handles_.size();
@@ -120,9 +120,8 @@ void CollisionBroadPhase::BuildSubBvh(std::span<const Aabb> world_space_aabbs, s
     BuildBvhRecursive(items, world_space_aabbs, sub_bvh_nodes, 0, items.size());
 }
 
-void CollisionBroadPhase::QueryBvh(PhysicsWorld& world, const std::pmr::vector<Aabb>& world_aabbs,
-    uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts,
-    std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts)
+void CollisionBroadPhase::QueryBvh(PhysicsWorld& world, const std::span<Aabb> world_aabbs, uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t,
+    uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts)
 {
     if (world.bvh_tree_root_index_ == std::numeric_limits<uint32_t>::max()) return;
     
