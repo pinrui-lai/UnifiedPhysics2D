@@ -13,7 +13,7 @@ private:
     static void SolveRigidParticleCollisionConstraints(PhysicsWorld& world, float sub_dt);
     static void SolveParticleEdgeCollisionConstraints(PhysicsWorld& world);
     static void SolveRigidParticleJointConstraints(PhysicsWorld& world, float sub_dt);
-    static void SolveRigidParticleAngleConstraints(PhysicsWorld& world, float sub_dt);
+    static void SolveRigidParticleAngularConstraints(PhysicsWorld& world, float sub_dt);
     static void FinalizeParticles(PhysicsWorld& world, float inv_sdt);
     
     friend PhysicsWorld;

@@ -46,7 +46,7 @@ void CollisionSolverSystem::SolveCollision(PhysicsWorld& world)
 void CollisionSolverSystem::InitializeContact(const PhysicsWorld& world, Manifold& manifold, const uint32_t contact_idx)
 {
     Contact& contact = manifold.contacts[contact_idx];
-    contact.pseudo_impulse_sum = 0.0f;
+    contact.pseudo_impulse_sum = 0.f;
     
     // Effective Mass on normal: K = 1/mA + 1/mB + (rA x n)^2 / IA + (rB x n)^2 / IB
     const Vec2 ra = contact.collision_point_a - world.positions_[manifold.a].val;
@@ -74,7 +74,7 @@ void CollisionSolverSystem::InitializeContact(const PhysicsWorld& world, Manifol
     // Bias for Solving Penetration of Split Impulse
     constexpr float beta = 0.2f;
     constexpr float slop = 0.01f; // Slight penetration is permissible to prevent shaking.
-    const float penetration = std::max(0.0f, contact.depth - slop);
+    const float penetration = std::max(0.f, contact.depth - slop);
     contact.bias = beta * penetration;
     
     // Target restitution velocity.
@@ -84,7 +84,7 @@ void CollisionSolverSystem::InitializeContact(const PhysicsWorld& world, Manifol
     const float rel_vel_normal = rel_velocity.Dot(manifold.normal);
 
     const float restitution = std::min(rigid_body_a.restitution, rigid_body_b.restitution);
-    contact.restitution_velocity = 0.0f;
+    contact.restitution_velocity = 0.f;
     if (rel_vel_normal < -0.1f)
     {
         contact.restitution_velocity = -restitution * rel_vel_normal;
@@ -135,7 +135,7 @@ void CollisionSolverSystem::SolveVelocityConstraint(PhysicsWorld& world, Manifol
     
     // Clamp impulse magnitude to make sure only push
     const float old_impulse_magnitude = contact.normal_impulse_sum;
-    contact.normal_impulse_sum = std::max(old_impulse_magnitude + delta_impulse_magnitude, 0.0f);
+    contact.normal_impulse_sum = std::max(old_impulse_magnitude + delta_impulse_magnitude, 0.f);
     delta_impulse_magnitude = contact.normal_impulse_sum - old_impulse_magnitude;
     
     // Apply impulse, Jacobian Matrix of Penetration Constrain = [-(transpose n), -CrossProduct(ra, normal), transpose n, CrossProduct(ra, normal)] 
@@ -189,7 +189,7 @@ void CollisionSolverSystem::SolvePositionConstraint(PhysicsWorld& world, Manifol
     const RigidBodyComponent& rigid_body_a = world.rigid_bodies_[manifold.a];
     const RigidBodyComponent& rigid_body_b = world.rigid_bodies_[manifold.b];
     
-    if (rigid_body_a.inv_mass == 0.0f && rigid_body_b.inv_mass == 0.0f) return;
+    if (rigid_body_a.inv_mass == 0.f && rigid_body_b.inv_mass == 0.f) return;
 
     const Vec2 ra = contact.collision_point_a - world.positions_[manifold.a].val;
     const Vec2 rb = contact.collision_point_b - world.positions_[manifold.b].val;
@@ -204,7 +204,7 @@ void CollisionSolverSystem::SolvePositionConstraint(PhysicsWorld& world, Manifol
     
     // Clamp impulse magnitude to make sure only push
     const float old_pseudo_impulse_magnitude = contact.pseudo_impulse_sum;
-    contact.pseudo_impulse_sum = std::max(old_pseudo_impulse_magnitude + delta_pseudo_impulse_magnitude, 0.0f);
+    contact.pseudo_impulse_sum = std::max(old_pseudo_impulse_magnitude + delta_pseudo_impulse_magnitude, 0.f);
     delta_pseudo_impulse_magnitude = contact.pseudo_impulse_sum - old_pseudo_impulse_magnitude;
     
     // Apply impulse, Jacobian Matrix of Penetration Constrain = [-(transpose n), -CrossProduct(ra, normal), transpose n, CrossProduct(ra, normal)] 

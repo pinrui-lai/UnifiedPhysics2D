@@ -1,8 +1,8 @@
 #include <execution>
 #include <ranges>
 
-#include "collision_broad_phase.h"
 #include "physics_world.h"
+#include "collision_broad_phase.h"
 
 void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs)
 {
@@ -102,7 +102,6 @@ void CollisionBroadPhase::BuildSubBvh(std::span<const Aabb> world_space_aabbs, s
     const float inv_scene_aabb_height = 1 / (scene_aabb.max_y - scene_aabb.min_y);
     
     // Get Morton Code and create sort item.
-    // std::pmr::vector<Item> items(world_space_aabbs.size(), frame_arena_);
     thread_local  std::vector<Item> items;
     items.resize(world_space_aabbs.size());
     
@@ -168,6 +167,8 @@ void CollisionBroadPhase::QueryBvh(PhysicsWorld& world, const std::span<Aabb> wo
                 // Rigid vs Soft (Particle)
                 if (is_query_rigid)
                 {
+                    if (world.rigid_soft_collision_ignore_.contains(MakePairKey(query_obj_idx, soft_idx))) continue;
+                    
                     const auto& soft_handle = world.soft_body_handles_[soft_idx];
                     for (uint32_t i = 0; i < soft_handle.surface_particle_count; ++i)
                     {
@@ -178,7 +179,10 @@ void CollisionBroadPhase::QueryBvh(PhysicsWorld& world, const std::span<Aabb> wo
                 // Soft vs Soft
                 else
                 {
-                    if (const uint32_t query_soft_idx = query_obj_idx - rigid_count; query_soft_idx < soft_idx) {
+                    const uint32_t query_soft_idx = query_obj_idx - rigid_count;
+                    if (world.soft_soft_collision_ignore_.contains(MakePairKey(query_soft_idx, soft_idx))) continue;
+                    
+                    if (query_soft_idx < soft_idx) {
                         soft_soft_contacts.emplace_back(query_soft_idx, soft_idx); // a's particles to b's edges
                         soft_soft_contacts.emplace_back(soft_idx, query_soft_idx); // b's particles to a's edges
                     }

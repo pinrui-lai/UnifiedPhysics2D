@@ -1,5 +1,4 @@
 #pragma once
-
 #include <memory_resource>
 #include <span>
 #include <unordered_map>
@@ -89,7 +88,7 @@ private:
     std::vector<XpbdRigidParticleCollisionConstraint> rigid_particle_collision_constraints_;
     std::vector<XpbdParticleEdgeCollisionConstraint> particle_edge_collision_constraints_;
     std::vector<XpbdRigidParticleJointConstraint> rigid_particle_joint_constraints_;
-    std::vector<XpbdRigidParticleAngleConstraint> rigid_particle_angle_constraints_;
+    std::vector<XpbdRigidParticleAngularConstraint> rigid_particle_angular_constraints_;
     std::vector<Aabb> particle_aabbs_;
     std::vector<Aabb> surface_edge_aabbs_;
     std::vector<std::pmr::vector<BvhNode>> soft_body_surface_particle_bvhs_;
@@ -108,14 +107,14 @@ public:
     BodyHandle CreateCircle(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float radius, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreateBox(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float half_width, float half_height, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreatePolygon(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, const std::vector<Vec2>& vertices, float restitution = 0.1f, float friction = 0.1f);
-    static uint32_t AddParticle(PhysicsWorld& world, const Vec2& pos, float inv_mass, float friction);
-    static uint32_t AddDistanceConstraint(PhysicsWorld& world, uint32_t p1, uint32_t p2, float compliance);
-    static uint32_t AddTriangleAreaConstraint(PhysicsWorld& world, uint32_t p1, uint32_t p2, uint32_t p3, float compliance);
-    static uint32_t AddGlobalAreaConstraint(PhysicsWorld& world, uint32_t start_particle_idx, uint16_t particle_count, float compliance);
+    uint32_t AddParticle(const Vec2& pos, float inv_mass, float friction);
+    uint32_t AddDistanceConstraint(uint32_t p1, uint32_t p2, float compliance);
+    uint32_t AddTriangleAreaConstraint(uint32_t p1, uint32_t p2, uint32_t p3, float compliance);
+    uint32_t AddGlobalAreaConstraint(uint32_t start_particle_idx, uint16_t particle_count, float compliance);
     uint32_t AddRigidParticleJointConstraint(uint32_t particle_idx, uint32_t rigid_idx, Vec2 anchor_local);
     void AddSoftSoftCollisionIgnore(uint32_t body_idx1, uint32_t body_idx2);
     void AddRigidSoftCollisionIgnore(uint32_t rigid_idx, uint32_t soft_idx);
-    SoftBodyHandle CreateRope(const Vec2& start, const Vec2& end, uint16_t segments, float mass, float friction, float compliance = 0.0f, bool fix_start = true, bool fix_end = false);
+    SoftBodyHandle CreateRope(const Vec2& start, const Vec2& end, uint16_t segments, float mass, float friction, float compliance = 0.f, bool fix_start = true, bool fix_end = false);
     SoftBodyHandle CreateSoftBox(const Vec2& pos, float width, float height, uint16_t res_x, uint16_t res_y, float mass, float friction, float compliance);
     SoftBodyHandle CreateSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
     SoftBodyHandle CreatePressureSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
@@ -133,15 +132,15 @@ public:
     const std::vector<Rot>& GetRots() { return rots_; }
     const std::vector<Shape>& GetShapes() { return shapes_; }
     const std::vector<Vec2>& GetVertices() { return vertices_; }
-    const std::span<BvhNode> GetBvhNodes() { return bvh_tree_nodes_; }
+    std::span<BvhNode> GetBvhNodes() { return bvh_tree_nodes_; }
     const std::vector<Manifold>& GetManifolds() { return manifolds_; }
     const std::vector<Vec2>& GetParticlePositions() { return particle_positions_; }
     const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
     const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
     auto GetParticleRigidConstraintsSize() const { return rigid_particle_collision_constraints_.size(); }
     auto GetParticleEdgeConstraintsSize() const { return particle_edge_collision_constraints_.size(); }
-    static std::array<Vec2, 4> GetBodyVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i);
-    static std::vector<Vec2> GetBodyVertices(const PhysicsWorld& world, const PolygonShape& polygon_shape, uint32_t i);
+    std::array<Vec2, 4> GetBodyVertices(const BoxShape& box_shape, uint32_t i);
+    std::vector<Vec2> GetBodyVertices(const PolygonShape& polygon_shape, uint32_t i);
     const std::vector<std::pmr::vector<BvhNode>>& GetSubBvhs(){return soft_body_surface_particle_bvhs_;}
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }

@@ -1,13 +1,12 @@
 #pragma once
-
 #include <array>
 #include <cmath>
 #include <limits>
 
 struct Vec2
 {
-    float x{0.0f};
-    float y{0.0f};
+    float x{0.f};
+    float y{0.f};
     
     constexpr Vec2() = default;
     constexpr Vec2(const float x, const float y) : x{x}, y{y} {}
@@ -32,7 +31,7 @@ struct Vec2
     Vec2 Normalized() const
     {
         const float len = Length();
-        return len > 0.0f ? Vec2{x / len, y / len} : Vec2{0.0f, 0.0f};
+        return len > 0.f ? Vec2{x / len, y / len} : Vec2{0.f, 0.f};
     }
     
     // Cartesian Coordinate System (The Y-axis direction is upwards as positive).
@@ -90,7 +89,7 @@ struct XpbdDistanceConstraint
     uint32_t p2;
     float rest_length;
     float compliance;
-    float lambda{0.0f};
+    float lambda{0.f};
 };
 
 struct XpbdRigidParticleCollisionConstraint
@@ -109,7 +108,7 @@ struct XpbdRigidParticleJointConstraint
     uint32_t body_idx;
 };
 
-struct XpbdRigidParticleAngleConstraint
+struct XpbdRigidParticleAngularConstraint
 {
     Vec2 rest_direction_local;
     Vec2 anchor_local;
@@ -123,8 +122,8 @@ struct XpbdTriangleAreaConstraint
 {
     uint32_t p1, p2, p3; // Clockwise
     float rest_area;
-    float compliance{0.0f};
-    float lambda{0.0f};
+    float compliance{0.f};
+    float lambda{0.f};
 };
 
 struct XpbdGlobalAreaConstraint
@@ -133,8 +132,8 @@ struct XpbdGlobalAreaConstraint
     uint32_t start_particle_idx{0};
     uint16_t particle_count{0};
     float rest_area;
-    float compliance{0.0f};
-    float lambda{0.0f};
+    float compliance{0.f};
+    float lambda{0.f};
 };
 
 struct XpbdParticleEdgeCollisionConstraint {

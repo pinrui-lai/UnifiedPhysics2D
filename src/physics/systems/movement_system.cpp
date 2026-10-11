@@ -12,7 +12,7 @@ void MovementSystem::IntegrateVelocity(PhysicsWorld& world, const float dt)
     auto index_range = std::views::iota(uint32_t{0}, count);
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(),[&](auto i)
     {
-        if (world.rigid_bodies_[i].inv_mass == 0.0f) return;
+        if (world.rigid_bodies_[i].inv_mass == 0.f) return;
         
         world.velocities_[i].val += (world.forces_[i] * world.rigid_bodies_[i].inv_mass) * dt;
         world.forces_[i] = {0.f, 0.f};

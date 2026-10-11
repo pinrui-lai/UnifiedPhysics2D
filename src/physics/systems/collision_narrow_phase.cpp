@@ -297,7 +297,7 @@ void CollisionNarrowPhase::GetCollisionPoints(PhysicsWorld& world, Vec2 collisio
             std::array<Vec2, 2> edge_pos_b;
             std::array<uint32_t, 2> edge_ids_b;
             float edge_b_dot_normal;
-            GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
+            GetMostPerpEdge(world.GetBodyVertices(b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
             
             contact1.id.features.type_b = 1;
             contact1.id.features.index_b = edge_ids_b[0];
@@ -312,7 +312,7 @@ void CollisionNarrowPhase::GetCollisionPoints(PhysicsWorld& world, Vec2 collisio
             std::array<Vec2, 2> edge_pos_a;
             std::array<uint32_t, 2> edge_ids_a;
             float edge_a_dot_normal;
-            GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
+            GetMostPerpEdge(world.GetBodyVertices(a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
             
             contact1.id.features.type_a = 1;
             contact1.id.features.index_a = edge_ids_a[0];
@@ -323,12 +323,12 @@ void CollisionNarrowPhase::GetCollisionPoints(PhysicsWorld& world, Vec2 collisio
             std::array<Vec2, 2> edge_pos_a;
             std::array<uint32_t, 2> edge_ids_a;
             float edge_a_dot_normal;
-            GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
+            GetMostPerpEdge(world.GetBodyVertices(a, index_a), collision_normal, edge_pos_a, edge_a_dot_normal, edge_ids_a);
             
             std::array<Vec2, 2> edge_pos_b;
             std::array<uint32_t, 2> edge_ids_b;
             float edge_b_dot_normal;
-            GetMostPerpEdge(PhysicsWorld::GetBodyVertices(world, b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
+            GetMostPerpEdge(world.GetBodyVertices(b, index_b), -collision_normal, edge_pos_b, edge_b_dot_normal, edge_ids_b);
             
             const bool is_ref_a = edge_a_dot_normal > edge_b_dot_normal + 1e-6f;
             const std::array<Vec2, 2> ref_edge_pos = is_ref_a ? edge_pos_a : edge_pos_b;
@@ -427,7 +427,7 @@ void CollisionNarrowPhase::CheckRigidParticleCollision(PhysicsWorld& world, uint
             Vec2 contact_normal{local_normal.x * c - local_normal.y * s, local_normal.x * s + local_normal.y * c};
             Vec2 contact_point = world.particle_positions_[particle_idx] + contact_normal * -depth;
    
-            world.particle_rigid_contacts_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
+            world.rigid_particle_collision_constraints_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
         },
         [&](const CircleShape& c)
         {
@@ -438,7 +438,7 @@ void CollisionNarrowPhase::CheckRigidParticleCollision(PhysicsWorld& world, uint
             Vec2 contact_normal = p_pos_map_to_circle.Normalized() ;
             Vec2 contact_point = world.particle_positions_[particle_idx] + contact_normal * -depth;
         
-            world.particle_rigid_contacts_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
+            world.rigid_particle_collision_constraints_.emplace_back(particle_idx, query_obj_idx, contact_normal, contact_point, -depth);
         },
         [&](const PolygonShape& p){},
     }, shape);
@@ -595,11 +595,11 @@ void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world, const std
     static uint32_t estimated_capacity = 4096;
     const uint32_t required_capacity = std::max(num_pairs * 16, estimated_capacity);
     
-    if (world.particle_edge_contacts_.capacity() < required_capacity) {
-        world.particle_edge_contacts_.reserve(required_capacity);
+    if (world.particle_edge_collision_constraints_.capacity() < required_capacity) {
+        world.particle_edge_collision_constraints_.reserve(required_capacity);
     }
     
-    world.particle_edge_contacts_.resize(required_capacity);
+    world.particle_edge_collision_constraints_.resize(required_capacity);
 
     std::atomic<uint32_t> total_new_contacts{0};
     auto index_range = std::views::iota(uint32_t{0}, num_pairs);
@@ -627,7 +627,7 @@ void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world, const std
         const uint32_t write_idx = total_new_contacts.fetch_add(count, std::memory_order_relaxed);
         
         if (write_idx + count <= required_capacity) {
-            std::ranges::copy(local_contacts, world.particle_edge_contacts_.begin() + write_idx);
+            std::ranges::copy(local_contacts, world.particle_edge_collision_constraints_.begin() + write_idx);
         }
     };
 
@@ -643,5 +643,5 @@ void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world, const std
     estimated_capacity = std::max(estimated_capacity, actual_new_contacts * 2);
     
     // Shrink `world.particle_edge_contacts_` back to the actual number of constraints.
-    world.particle_edge_contacts_.resize(actual_new_contacts);
+    world.particle_edge_collision_constraints_.resize(actual_new_contacts);
 }

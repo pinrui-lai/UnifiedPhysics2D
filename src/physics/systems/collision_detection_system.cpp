@@ -2,7 +2,6 @@
 #include <execution>
 
 #include "collision_detection_system.h"
-
 #include "collision_broad_phase.h"
 #include "collision_narrow_phase.h"
 #include "physics_world.h"
@@ -71,7 +70,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     // Rigid vs Rigid (GJK + EPA + Clipping).
     auto process = [&world](auto& manifold)
     {
-        if (world.rigid_bodies_[manifold.a].inv_mass == 0.0f && world.rigid_bodies_[manifold.b].inv_mass == 0.0f) return;
+        if (world.rigid_bodies_[manifold.a].inv_mass == 0.f && world.rigid_bodies_[manifold.b].inv_mass == 0.f) return;
         
         // Store old contacts and contact_count from the previous frame.
         const std::array<Contact, 2> old_contacts = manifold.contacts;

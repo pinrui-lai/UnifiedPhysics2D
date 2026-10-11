@@ -26,11 +26,11 @@ private:
         const Vec2 d = { std::abs(p.x) - b.x, std::abs(p.y) - b.y }; // Map the point to the first quadrant.
 
         // External distance (point outside the rectangle corner or boundary)
-        const Vec2 outside_vec = { std::max(d.x, 0.0f), std::max(d.y, 0.0f) };
+        const Vec2 outside_vec = { std::max(d.x, 0.f), std::max(d.y, 0.f) };
         const float outside_dist = outside_vec.Length();
 
         // Interior distance (negative value if the point is inside the rectangle)
-        const float inside_dist = std::min(std::max(d.x, d.y), 0.0f);
+        const float inside_dist = std::min(std::max(d.x, d.y), 0.f);
 
         return outside_dist + inside_dist;
     }
@@ -40,11 +40,11 @@ private:
         const Vec2 d = { std::abs(p.x) - b.x, std::abs(p.y) - b.y };
     
         // Inside the box, the shortest separation direction is perpendicular to the nearest edge.
-        Vec2 n = (d.x > d.y) ? Vec2{1.0f, 0.0f} : Vec2{0.0f, 1.0f};
+        Vec2 n = (d.x > d.y) ? Vec2{1.f, 0.f} : Vec2{0.f, 1.f};
     
         // Map to the quadrant where point p is located.
-        if (p.x < 0.0f) n.x = -n.x;
-        if (p.y < 0.0f) n.y = -n.y;
+        if (p.x < 0.f) n.x = -n.x;
+        if (p.y < 0.f) n.y = -n.y;
 
         return n;
     }

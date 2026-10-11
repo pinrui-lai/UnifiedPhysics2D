@@ -5,8 +5,6 @@
 #include "physics_world.h"
 #include "xpbd_solver_system.h"
 
-#include <numbers>
-
 void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
 {
     const uint32_t count = world.particle_positions_.size();
@@ -14,7 +12,7 @@ void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
     auto index_range = std::views::iota(uint32_t{0}, count);
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(),[&](auto i)
     {
-        if (world.particle_inv_masses_[i] == 0.0f) return;
+        if (world.particle_inv_masses_[i] == 0.f) return;
     
         world.particle_prev_positions_[i] = world.particle_positions_[i];
     
@@ -23,7 +21,7 @@ void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
         
         world.particle_positions_[i] += world.particle_velocities_[i] * sdt;
             
-        world.particle_forces_[i] = Vec2{0.0f, 0.0f};
+        world.particle_forces_[i] = Vec2{0.f, 0.f};
     });
 }
 
@@ -36,7 +34,7 @@ void XpbdSolver::SolveDistanceConstraint(PhysicsWorld& world, const float inv_sd
     const float w2 = world.particle_inv_masses_[i2];
     const float w_sum = w1 + w2;
     
-    if (w_sum == 0.0f) return;
+    if (w_sum == 0.f) return;
 
     const Vec2 pos1 = world.particle_positions_[i1];
     const Vec2 pos2 = world.particle_positions_[i2];
@@ -57,8 +55,8 @@ void XpbdSolver::SolveDistanceConstraint(PhysicsWorld& world, const float inv_sd
     
     // Position correction : dx = w * n * dLambda
     const Vec2 dx = n * delta_lambda;
-    if (w1 > 0.0f) world.particle_positions_[i1] += dx * w1;
-    if (w2 > 0.0f) world.particle_positions_[i2] -= dx * w2;
+    if (w1 > 0.f) world.particle_positions_[i1] += dx * w1;
+    if (w2 > 0.f) world.particle_positions_[i2] -= dx * w2;
 }
 
 void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, float inv_sdt_sq, XpbdTriangleAreaConstraint& c)
@@ -69,7 +67,7 @@ void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, float inv_sdt_
     const float w2 = world.particle_inv_masses_[i2];
     const float w3 = world.particle_inv_masses_[i3];
     
-    if (w1 + w2 + w3 == 0.0f) return;
+    if (w1 + w2 + w3 == 0.f) return;
     
     const Vec2 p1 = world.particle_positions_[i1];
     const Vec2 p2 = world.particle_positions_[i2];
@@ -93,9 +91,9 @@ void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, float inv_sdt_
     const float delta_lambda = (-C - alpha_tilde * c.lambda) / (grad_sq_sum + alpha_tilde);
     c.lambda += delta_lambda;
     
-    if (w1 > 0.0f) world.particle_positions_[i1] += grad1 * (w1 * delta_lambda);
-    if (w2 > 0.0f) world.particle_positions_[i2] += grad2 * (w2 * delta_lambda);
-    if (w3 > 0.0f) world.particle_positions_[i3] += grad3 * (w3 * delta_lambda);
+    if (w1 > 0.f) world.particle_positions_[i1] += grad1 * (w1 * delta_lambda);
+    if (w2 > 0.f) world.particle_positions_[i2] += grad2 * (w2 * delta_lambda);
+    if (w3 > 0.f) world.particle_positions_[i3] += grad3 * (w3 * delta_lambda);
 }
 
 void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_sq)
@@ -105,7 +103,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
     {
         if (c.particle_count < 3) return;
 
-        float current_area = 0.0f;
+        float current_area = 0.f;
         for (uint16_t i = 0; i < c.particle_count; ++i)
         {
             const uint32_t curr = c.start_particle_idx + i;
@@ -121,7 +119,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
 
         // Gradients
         std::pmr::vector<Vec2> grads(c.particle_count, &world.frame_arena_);
-        float grad_sq_sum = 0.0f;
+        float grad_sq_sum = 0.f;
 
         for (uint16_t i = 0; i < c.particle_count; ++i)
         {
@@ -149,7 +147,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
         {
             const uint32_t curr_idx = c.start_particle_idx + i;
             const float w = world.particle_inv_masses_[curr_idx];
-            if (w > 0.0f)
+            if (w > 0.f)
             {
                 world.particle_positions_[curr_idx] += grads[i] * (w * delta_lambda);
             }
@@ -173,7 +171,7 @@ void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, con
             
         // Calculate current penetration depth.
         float C = (world.particle_positions_[c.particle_idx] - c.contact_point).Dot(c.contact_normal);
-        if (C >= 0.0f) continue;
+        if (C >= 0.f) continue;
 
         const float delta_lambda = -C / w_sum;
 
@@ -231,7 +229,7 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
         Vec2 diff = p_pos - proj;
         
         float C = diff.Dot(c.normal) - physics_config::kTwoParticlesThickness;
-        if (C >= 0.0f) continue;
+        if (C >= 0.f) continue;
         
         const float w_p = world.particle_inv_masses_[c.body_a_particle_idx];
         const float w_a = world.particle_inv_masses_[c.body_b_p1_idx];
@@ -315,9 +313,9 @@ void XpbdSolver::SolveRigidParticleJointConstraints(PhysicsWorld& world, const f
     }
 }
 
-void XpbdSolver::SolveRigidParticleAngleConstraints(PhysicsWorld& world, const float sub_dt)
+void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const float sub_dt)
 {
-    for (auto& c : world.rigid_particle_angle_constraints_)
+    for (auto& c : world.rigid_particle_angular_constraints_)
     {
         // Convert anchor to world space.
         const Vec2 anchor_offset = world.rots_[c.body_idx].Mul(c.anchor_local);
@@ -371,7 +369,7 @@ void XpbdSolver::FinalizeParticles(PhysicsWorld& world, const float inv_sdt)
     auto index_range = std::views::iota(uint32_t{0}, count);
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(),[&](auto i)
     {
-        if (world.particle_inv_masses_[i] == 0.0f) return;
+        if (world.particle_inv_masses_[i] == 0.f) return;
     
         // Update the velocity based on the position correction.
         world.particle_velocities_[i] = (world.particle_positions_[i] - world.particle_prev_positions_[i]) * inv_sdt;

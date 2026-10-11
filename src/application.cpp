@@ -14,21 +14,21 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     SDL_GetWindowSize(window, &w, &h);
     
     // Small body for debug (check contact info).
-    // debug_circle_ = world.CreateCircle(Vec2{0.f, 0.f}, 0.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 0.2f, 1.f);
-    // debug_box_ = world.CreateBox(Vec2{0.f, 0.f} * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.0f, 0.f, 1.f, 1.f, 1.f);
+    // debug_circle_ = world.CreateCircle(Vec2{0.f, 0.f}, 0.f, {0.f, 0.f}, 0.f, 0.f, 1.f, 0.2f, 1.f);
+    // debug_box_ = world.CreateBox(Vec2{0.f, 0.f} * physics_config::kMpp, 1.f, {0.f, 0.f}, 0.f, 0.f, 1.f, 1.f, 1.f);
     
     // Floating obstacle Bodies.
     const Vec2 floating_circle_pos = Vec2{static_cast<float>(w) - 700.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
-    floating_circle_ = world.CreateCircle(floating_circle_pos, 0.0f,
+    floating_circle_ = world.CreateCircle(floating_circle_pos, 0.f,
         {0.f, 0.f}, floating_bodies_angular_vel_,
         0.f, 1.75f, floating_bodies_restitution_, floating_bodies_friction_);
     
-    floating_circle2_ = world.CreateCircle({floating_circle_pos.x + 2.5f, floating_circle_pos.y}, 0.0f,
+    floating_circle2_ = world.CreateCircle({floating_circle_pos.x + 2.5f, floating_circle_pos.y}, 0.f,
         {0.f, 0.f}, floating_bodies_angular_vel_,
         0.f, 1.75f, floating_bodies_restitution_, floating_bodies_friction_);
     
     const Vec2 floating_wide_box_pos = Vec2{400.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
-    floating_wide_box_1_ = world.CreateBox(floating_wide_box_pos, 0.0f,
+    floating_wide_box_1_ = world.CreateBox(floating_wide_box_pos, 0.f,
         {0.f, 0.f}, floating_bodies_angular_vel_,
         0.f, 3.2f, 0.3f, floating_bodies_restitution_, floating_bodies_friction_);
     
@@ -39,22 +39,22 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     // Ceil, Floor, Left wall, Right wall.
     const Vec2 ceil_pos = Vec2{static_cast<float>(w) / 2.f, static_cast<float>(h) + 15.f } * physics_config::kMpp;
     ceil_ = world.CreateBox(ceil_pos, 0.f,
-        {0.f, 0.f}, 0.0f,
+        {0.f, 0.f}, 0.f,
         0.f, static_cast<float>(w) / 2 * physics_config::kMpp, 1.f, boundary_restitution_, boundary_friction_);
     
     const Vec2 floor_pos = Vec2{static_cast<float>(w) / 2.f, 0.f } * physics_config::kMpp;
     floor_ = world.CreateBox(floor_pos, 0.f,
-        {0.f, 0.f}, 0.0f,
+        {0.f, 0.f}, 0.f,
         0.f, static_cast<float>(w) / 2 * physics_config::kMpp, 1.f, boundary_restitution_, boundary_friction_);
     
     const Vec2 left_all_pos = Vec2{10.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     left_wall_ = world.CreateBox(left_all_pos, 0.f,
-        {0.f, 0.f}, 0.0f,
+        {0.f, 0.f}, 0.f,
         0.f, 1.f, static_cast<float>(h) / 2 * physics_config::kMpp, boundary_restitution_, boundary_friction_);
     
     const Vec2 right_wall_pos = Vec2{static_cast<float>(w) - 10.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
     right_wall_ = world.CreateBox( right_wall_pos, 0.f,
-        {0.f, 0.f}, 0.0f,
+        {0.f, 0.f}, 0.f,
         0.f, 1.f, static_cast<float>(h) / 2 * physics_config::kMpp, boundary_restitution_, boundary_friction_);
     
     // XPBD soft rope.
@@ -71,14 +71,14 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     const Vec2 hang_rope_start_pos{static_cast<float>(w) * physics_config::kMpp * 0.2f, ceil_pos.y - 1.f};
     const Vec2 hang_rope_end_pos{hang_rope_start_pos.x, hang_rope_start_pos.y - 2.f};
     const uint32_t hang_rope_handle_idx = world.GetSoftBodyHandles().size();
-    world.CreateRope(hang_rope_start_pos, hang_rope_end_pos, hang_rope_segments, 2.0f, 0.5f, 0.00001f, true, false);
+    world.CreateRope(hang_rope_start_pos, hang_rope_end_pos, hang_rope_segments, 2.f, 0.5f, 0.f, true, false);
 
     constexpr float hang_soft_box_extent = 0.8f;
     const uint32_t hang_top_left_particle_idx = world.GetParticlePositions().size();
     const uint32_t hang_soft_box_handle_idx = world.GetSoftBodyHandles().size();
     world.CreateSoftBox({hang_rope_end_pos.x + hang_soft_box_extent, hang_rope_end_pos.y - hang_soft_box_extent},
         hang_soft_box_extent * 2.f, hang_soft_box_extent * 2.f, 5, 5, 5.f, 0.5f, 0.001f);
-    PhysicsWorld::AddDistanceConstraint(world, hang_rope_end_idx, hang_top_left_particle_idx, 0.f);
+    world.AddDistanceConstraint(hang_rope_end_idx, hang_top_left_particle_idx, 0.f);
     world.AddSoftSoftCollisionIgnore(hang_rope_handle_idx, hang_soft_box_handle_idx);
     
     // // Hanging Body 2
@@ -88,10 +88,10 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     const Vec2 hang_rope2_start_pos{hang_rope_start_pos.x + 2.5f, ceil_pos.y - 1.f};
     const Vec2 hang_rope2_end_pos{hang_rope2_start_pos.x, hang_rope2_start_pos.y - 3.f};
     const uint32_t hang_rope2_handle_idx = world.GetSoftBodyHandles().size();
-    world.CreateRope(hang_rope2_start_pos, hang_rope2_end_pos, hang_rope2_segments, 2.0f, 0.5f, 0.00001f, true, false);
+    world.CreateRope(hang_rope2_start_pos, hang_rope2_end_pos, hang_rope2_segments, 2.f, 0.5f, 0.f, true, false);
 
     const uint32_t hang_box_idx = world.GetPositions().size();
-    world.CreateBox(hang_rope2_end_pos, 0.f, {0.f, 0.f}, 0.f, 3.f, 0.8f, 0.8f, 0.5f, 0.5f);
+    world.CreateBox(hang_rope2_end_pos, 0.f, {0.5f, 0.f}, 0.f, 3.f, 0.8f, 0.8f, 0.5f, 0.5f);
     world.AddRigidParticleJointConstraint(hang_rope2_end_idx, hang_box_idx, {0.f, 0.f});
     world.AddRigidSoftCollisionIgnore(hang_box_idx, hang_rope2_handle_idx);
 }
@@ -231,7 +231,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
                     draw_vertices[idx] = ImVec2(wx, wy);
                 }
 
-                draw_list->AddPolyline(draw_vertices.data(), 4, IM_COL32(255, 0, 0, 255), ImDrawFlags_Closed, 2.0f);
+                draw_list->AddPolyline(draw_vertices.data(), 4, IM_COL32(255, 0, 0, 255), ImDrawFlags_Closed, 2.f);
         },
         [](const PolygonShape& p) {  }
             }, shapes[i]);
@@ -248,7 +248,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     {
         ImVec2 p0(particle_positions[constraint.p1].x * physics_config::kPpm, float_h - particle_positions[constraint.p1].y * physics_config::kPpm);
         ImVec2 p1(particle_positions[constraint.p2].x * physics_config::kPpm, float_h - particle_positions[constraint.p2].y * physics_config::kPpm);
-        draw_list->AddLine(p0, p1, IM_COL32(255, 0, 0, 255), 2.0f);
+        draw_list->AddLine(p0, p1, IM_COL32(255, 0, 0, 255), 2.f);
     }
     
     if (draw_surface_particle_)
@@ -259,7 +259,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
             {
                 const uint32_t idx = soft_body_handle.start_surface_particle_idx + i;
                 ImVec2 pos{particle_positions[idx].x * physics_config::kPpm, float_h - particle_positions[idx].y * physics_config::kPpm};
-                draw_list->AddCircleFilled(pos, 5.0f, IM_COL32(255, 127, 0, 255));
+                draw_list->AddCircleFilled(pos, 5.f, IM_COL32(255, 127, 0, 255));
             }
         }
     }
@@ -269,14 +269,14 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     {
         ImVec2 p0(incident_edge[0].x * physics_config::kPpm, float_h - incident_edge[0].y * physics_config::kPpm);
         ImVec2 p1(incident_edge[1].x * physics_config::kPpm, float_h - incident_edge[1].y * physics_config::kPpm);
-        draw_list->AddLine(p0, p1, IM_COL32(20, 200, 10, 255), 5.0f);
+        draw_list->AddLine(p0, p1, IM_COL32(20, 200, 10, 255), 5.f);
     }
     
     for (const auto& reference_edge : world.debug_reference_edges_)
     {
         ImVec2 p0(reference_edge[0].x * physics_config::kPpm, float_h - reference_edge[0].y * physics_config::kPpm);
         ImVec2 p1(reference_edge[1].x * physics_config::kPpm, float_h - reference_edge[1].y * physics_config::kPpm);
-        draw_list->AddLine(p0, p1, IM_COL32(0, 160, 240, 255), 5.0f);
+        draw_list->AddLine(p0, p1, IM_COL32(0, 160, 240, 255), 5.f);
     }
     
     if (world.show_debug_contact_points_)
@@ -291,10 +291,10 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
                 ImVec2 pt_b(manifold.contacts[i].collision_point_b.x * physics_config::kPpm, float_h - manifold.contacts[i].collision_point_b.y * physics_config::kPpm);
         
                 // Line collision_point_a to collision_point_b.
-                draw_list->AddLine(pt_a, pt_b, IM_COL32(255, 255, 0, 255), 5.0f);
+                draw_list->AddLine(pt_a, pt_b, IM_COL32(255, 255, 0, 255), 5.f);
             
                 // Draw collision point a.
-                draw_list->AddCircleFilled(pt_a, 5.0f, IM_COL32(230, 230, 230, 255));
+                draw_list->AddCircleFilled(pt_a, 5.f, IM_COL32(230, 230, 230, 255));
             }
         }    
     }
@@ -361,7 +361,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Spacing();
     ImGui::SeparatorText("Boundaries:");
     ImGui::Indent(indent_len);
-    if (ImGui::SliderFloat("Restitution##bound", &boundary_restitution_, 0.0f, 1.0f))
+    if (ImGui::SliderFloat("Restitution##bound", &boundary_restitution_, 0.f, 1.f))
     {
         for (const auto& obj : boundaries_)
         {
@@ -369,7 +369,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
             world.SetRestitution(*obj, boundary_restitution_);
         }
     }
-    if (ImGui::SliderFloat("Friction##bound", &boundary_friction_, 0.0f, 1.0f))
+    if (ImGui::SliderFloat("Friction##bound", &boundary_friction_, 0.f, 1.f))
     {
         for (const auto& obj : boundaries_)
         {
@@ -383,7 +383,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Spacing();
     ImGui::SeparatorText("Floating Bodies:");
     ImGui::Indent(indent_len);
-    if (ImGui::SliderFloat("Restitution##floating", &floating_bodies_restitution_, 0.0f, 1.0f))
+    if (ImGui::SliderFloat("Restitution##floating", &floating_bodies_restitution_, 0.f, 1.f))
     {
         for (const auto& obj : floatings_)
         {
@@ -391,7 +391,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
             world.SetRestitution(*obj, floating_bodies_restitution_);
         }
     }
-    if (ImGui::SliderFloat("Friction##floating", &floating_bodies_friction_, 0.0f, 1.0f))
+    if (ImGui::SliderFloat("Friction##floating", &floating_bodies_friction_, 0.f, 1.f))
     {
         for (const auto& obj : floatings_)
         {
@@ -410,7 +410,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
             world.SetAngularVelocity(*obj, 0.f);
         }
     }
-    if (ImGui::SliderFloat("Angular Velocity##floating", &floating_bodies_angular_vel_, -6.0f, 6.0f))
+    if (ImGui::SliderFloat("Angular Velocity##floating", &floating_bodies_angular_vel_, -6.f, 6.f))
     {
         for (const auto& obj : floatings_)
         {
@@ -473,10 +473,10 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Indent(indent_len);
     ImGui::Checkbox("Is Multi-Thread(Rigid-Rigid&Soft-Soft Narrow-Phase)", &world.is_multi_thread_);
     ImGui::Checkbox("Draw Contact Info", &world.show_debug_contact_points_);
-    ImGui::Checkbox("Draw IncidentEdge & ReferenceEdge(multi-thread only)", &world.show_debug_clipping_);
+    ImGui::Checkbox("Draw IncidentEdge & ReferenceEdge(single-thread only)", &world.show_debug_clipping_);
     ImGui::Checkbox("Draw Surface Particle of Soft Body", &draw_surface_particle_);
     ImGui::Spacing();
-    ImGui::Text("BVH :");
+    ImGui::Text("BVH(Deeper nodes' AABBs shrink more when rendered) :");
     ImGui::Checkbox("Draw Global BVH", &draw_bvh_);
     ImGui::Checkbox("Draw Soft Body Surface Particle BVH (Only updated\nwhen it collides with another soft body & "
                     "surface\nparticle count exceeds 100)", &draw_sub_bvh_);
@@ -495,7 +495,7 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
     {
     case SpawnType::RigidCircle:
         world.CreateCircle(
-            spawn_pos, 0.0f, {0.f, 0.f}, 0.0f,
+            spawn_pos, 0.f, {0.f, 0.f}, 0.f,
             circle_spawn_mass_, circle_spawn_radius_,
             circle_spawn_restitution_, circle_spawn_friction_
         );
@@ -503,7 +503,7 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
 
     case SpawnType::RigidBox:
         world.CreateBox(
-            spawn_pos, 0.0f, {0.f, 0.f}, 0.0f,
+            spawn_pos, 0.f, {0.f, 0.f}, 0.f,
             box_spawn_mass_, box_spawn_half_width_, box_spawn_half_height_,
             box_spawn_restitution_, box_spawn_friction_
         );
@@ -511,7 +511,7 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
 
     case SpawnType::SoftRope:
         {
-            const Vec2 end_pos = is_horizontal_ ? spawn_pos + Vec2{rope_spawn_length_, 0.0f} : spawn_pos - Vec2{0.0f, rope_spawn_length_};
+            const Vec2 end_pos = is_horizontal_ ? spawn_pos + Vec2{rope_spawn_length_, 0.f} : spawn_pos - Vec2{0.f, rope_spawn_length_};
             world.CreateRope(spawn_pos, end_pos, static_cast<uint16_t>(rope_spawn_num_segments_), rope_spawn_mass_, rope_spawn_friction_, rope_spawn_compliance_, fix_start_, fix_end_);
             break;
         }
@@ -553,20 +553,20 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
     case SpawnType::RigidCircle:
         ImGui::SameLine();
         ImGui::Text("Rigid Circle");
-        ImGui::SliderFloat("Restitution##c", &circle_spawn_restitution_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Friction##c", &circle_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Mass##c", &circle_spawn_mass_, 0.1f, 50.0f);
-        ImGui::SliderFloat("Radius##c", &circle_spawn_radius_, 0.1f, 5.0f);
+        ImGui::SliderFloat("Restitution##c", &circle_spawn_restitution_, 0.f, 1.f);
+        ImGui::SliderFloat("Friction##c", &circle_spawn_friction_, 0.f, 1.f);
+        ImGui::SliderFloat("Mass##c", &circle_spawn_mass_, 0.1f, 50.f);
+        ImGui::SliderFloat("Radius##c", &circle_spawn_radius_, 0.1f, 5.f);
         break;
 
     case SpawnType::RigidBox:
         ImGui::SameLine();
         ImGui::Text("Rigid Box");
-        ImGui::SliderFloat("Restitution##b", &box_spawn_restitution_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Friction##b", &box_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Mass##b", &box_spawn_mass_, 0.1f, 50.0f);
-        ImGui::SliderFloat("Half-Width##b", &box_spawn_half_width_, 0.1f, 5.0f);
-        ImGui::SliderFloat("Half-Height##b", &box_spawn_half_height_, 0.1f, 5.0f);
+        ImGui::SliderFloat("Restitution##b", &box_spawn_restitution_, 0.f, 1.f);
+        ImGui::SliderFloat("Friction##b", &box_spawn_friction_, 0.f, 1.f);
+        ImGui::SliderFloat("Mass##b", &box_spawn_mass_, 0.1f, 50.f);
+        ImGui::SliderFloat("Half-Width##b", &box_spawn_half_width_, 0.1f, 5.f);
+        ImGui::SliderFloat("Half-Height##b", &box_spawn_half_height_, 0.1f, 5.f);
         break;
 
     case SpawnType::SoftRope:
@@ -577,60 +577,60 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::Checkbox("Fix End", &fix_end_);
         ImGui::SameLine();
         ImGui::Checkbox("Horizontal", &is_horizontal_);
-        ImGui::SliderFloat("Length##rope", &rope_spawn_length_, 1.0f, 30.0f);
+        ImGui::SliderFloat("Length##rope", &rope_spawn_length_, 1.f, 30.f);
         ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 1, 128);
-        ImGui::SliderFloat("Mass##rope", &rope_spawn_mass_, 0.1f, 100.0f);
-        ImGui::SliderFloat("Friction##rope", &rope_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Compliance##rope", &rope_spawn_compliance_, 0.0f, 0.005f, "%.7f");
+        ImGui::SliderFloat("Mass##rope", &rope_spawn_mass_, 0.1f, 100.f);
+        ImGui::SliderFloat("Friction##rope", &rope_spawn_friction_, 0.f, 1.f);
+        ImGui::SliderFloat("Compliance##rope", &rope_spawn_compliance_, 0.f, 0.005f, "%.7f");
         break;
 
     case SpawnType::SoftBox:
         ImGui::SameLine();
         ImGui::Text("Soft Box");
-        ImGui::SliderFloat("Width##sbox", &soft_box_spawn_width_, 0.5f, 10.0f);
-        ImGui::SliderFloat("Height##sbox", &soft_box_spawn_height_, 0.5f, 10.0f);
+        ImGui::SliderFloat("Width##sbox", &soft_box_spawn_width_, 0.5f, 10.f);
+        ImGui::SliderFloat("Height##sbox", &soft_box_spawn_height_, 0.5f, 10.f);
         ImGui::SliderInt("Grid Nx##sbox", &soft_box_spawn_nx_, 2, 20);
         ImGui::SliderInt("Grid Ny##sbox", &soft_box_spawn_ny_, 2, 20);
-        ImGui::SliderFloat("Mass##sbox", &soft_box_spawn_mass_, 0.1f, 100.0f);
-        ImGui::SliderFloat("Friction##sbox", &soft_box_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Compliance##sbox", &soft_box_spawn_compliance_, 0.0f, 0.005f, "%.7f");
+        ImGui::SliderFloat("Mass##sbox", &soft_box_spawn_mass_, 0.1f, 100.f);
+        ImGui::SliderFloat("Friction##sbox", &soft_box_spawn_friction_, 0.f, 1.f);
+        ImGui::SliderFloat("Compliance##sbox", &soft_box_spawn_compliance_, 0.f, 0.005f, "%.7f");
         break;
 
     case SpawnType::SoftCircleArea:
         ImGui::SameLine();
         ImGui::Text("Triangle Area Soft Circle");
-        ImGui::SliderFloat("Radius##scircle", &soft_circle_spawn_radius_, 0.5f, 10.0f);
+        ImGui::SliderFloat("Radius##scircle", &soft_circle_spawn_radius_, 0.5f, 10.f);
         ImGui::SliderInt("Segments##scircle", &soft_circle_spawn_num_segments_, 3, 128);
-        ImGui::SliderFloat("Mass##scircle", &soft_circle_spawn_mass_, 0.1f, 100.0f);
-        ImGui::SliderFloat("Friction##scircle", &soft_circle_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Compliance##scircle", &soft_circle_spawn_compliance_, 0.0f, 0.005f, "%.7f");
+        ImGui::SliderFloat("Mass##scircle", &soft_circle_spawn_mass_, 0.1f, 100.f);
+        ImGui::SliderFloat("Friction##scircle", &soft_circle_spawn_friction_, 0.f, 1.f);
+        ImGui::SliderFloat("Compliance##scircle", &soft_circle_spawn_compliance_, 0.f, 0.005f, "%.7f");
         break;
 
     case SpawnType::SoftCirclePressure:
         ImGui::SameLine();
         ImGui::Text("Pressure Soft Circle");
-        ImGui::SliderFloat("Radius##pcircle", &pressure_circle_spawn_radius_, 0.5f, 10.0f);
+        ImGui::SliderFloat("Radius##pcircle", &pressure_circle_spawn_radius_, 0.5f, 10.f);
         ImGui::SliderInt("Segments##pcircle", &pressure_circle_spawn_num_segments_, 3, 128);
-        ImGui::SliderFloat("Mass##pcircle", &pressure_circle_spawn_mass_, 0.0f, 100.0f);
-        ImGui::SliderFloat("Friction##pcircle", &pressure_circle_spawn_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.0f, 0.001f, "%.7f");
+        ImGui::SliderFloat("Mass##pcircle", &pressure_circle_spawn_mass_, 0.f, 100.f);
+        ImGui::SliderFloat("Friction##pcircle", &pressure_circle_spawn_friction_, 0.f, 1.f);
+        ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.f, 0.001f, "%.7f");
         break;
         
     case SpawnType::Car:
         ImGui::SameLine();
         ImGui::Text("Car");
-        ImGui::SliderFloat("Wheel Radius##car", &wheel_radius_, 0.5f, 2.0f);
+        ImGui::SliderFloat("Wheel Radius##car", &wheel_radius_, 0.5f, 2.f);
         ImGui::SliderFloat("Wheel Mass##car", &wheel_mass_, 0.1f, 50.f);
-        ImGui::SliderFloat("Wheel Friction##car", &wheel_friction_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Wheel Restitution##car", &wheel_restitution_, 0.0f, 1.f);
-        ImGui::SliderFloat("Absorber Height##car", &absorber_height_, 0.5f, 5.0f);
+        ImGui::SliderFloat("Wheel Friction##car", &wheel_friction_, 0.f, 1.f);
+        ImGui::SliderFloat("Wheel Restitution##car", &wheel_restitution_, 0.f, 1.f);
+        ImGui::SliderFloat("Absorber Height##car", &absorber_height_, 0.5f, 5.f);
         ImGui::SliderFloat("Absorber Mass##car", &absorber_mass_, 0.1f, 50.f);
-        ImGui::SliderFloat("Absorber Compliance##car", &absorber_compliance_, 0.0f, 0.001f, "%.7f");
-        ImGui::SliderFloat("Car Body Width##car", &car_body_width_, 1.0f, 10.f);
-        ImGui::SliderFloat("Car Body Height##car", &car_body_height_, 0.5f, 5.0f);
+        ImGui::SliderFloat("Absorber Compliance##car", &absorber_compliance_, 0.f, 0.001f, "%.7f");
+        ImGui::SliderFloat("Car Body Width##car", &car_body_width_, 1.f, 10.f);
+        ImGui::SliderFloat("Car Body Height##car", &car_body_height_, 0.5f, 5.f);
         ImGui::SliderFloat("Car Body Mass##car", &car_body_mass_, 0.1f, 50.f);
-        ImGui::SliderFloat("Car Body Restitution##car", &car_body_restitution_, 0.0f, 1.0f);
-        ImGui::SliderFloat("Car Body Friction##car", &car_body_friction_, 0.0f, 1.f);
+        ImGui::SliderFloat("Car Body Restitution##car", &car_body_restitution_, 0.f, 1.f);
+        ImGui::SliderFloat("Car Body Friction##car", &car_body_friction_, 0.f, 1.f);
         break;
     }
 }
@@ -643,7 +643,7 @@ void Application::ResetWorld(SDL_Window* window, PhysicsWorld& world)
 
 ImU32 Application::GetDepthColor(const int depth, const float alpha)
 {
-    const float hue = std::fmod(0.15f * static_cast<float>(depth), 1.0f); // Each depth has a different color.
+    const float hue = std::fmod(0.15f * static_cast<float>(depth), 1.f); // Each depth has a different color.
     float r, g, b;
     ImGui::ColorConvertHSVtoRGB(hue, 0.8f, 0.9f, r, g, b);
     return ImColor(r, g, b, alpha);
@@ -674,7 +674,7 @@ void Application::DrawBvhNode(ImDrawList* draw_list, std::span<const BvhNode> no
     const ImU32 fill_color   = GetDepthColor(current_depth, 0.05f);
     
     draw_list->AddRectFilled(p_min, p_max, fill_color);
-    draw_list->AddRect(p_min, p_max, stroke_color, 0.0f, 0, 1.5f);
+    draw_list->AddRect(p_min, p_max, stroke_color, 0.f, 0, 1.5f);
 
     // Recursively draw subtree
     if (!node.IsLeaf()) {
@@ -708,23 +708,23 @@ void Application::RenderBvhDebug(std::span<const BvhNode> nodes, const int root_
         draw_list->AddRect(
             ImVec2(target.aabb.min_x * physics_config::kPpm, window_height - target.aabb.min_y * physics_config::kPpm),
             ImVec2(target.aabb.max_x * physics_config::kPpm, window_height - target.aabb.max_y * physics_config::kPpm),
-            IM_COL32(255, 255, 0, 255), 0.0f, 0, 3.0f
+            IM_COL32(255, 255, 0, 255), 0.f, 0, 3.f
         );
 
         // Connect red line to the Left Child and mark it with a red dot.
         if (target.left_child != std::numeric_limits<uint32_t>::max()) {
             ImVec2 left_center = GetAabbCenter(nodes[target.left_child].aabb);
             left_center = {left_center.x * physics_config::kPpm, window_height - left_center.y * physics_config::kPpm};
-            draw_list->AddLine(target_center, left_center, IM_COL32(255, 50, 50, 255), 2.0f);
-            draw_list->AddCircleFilled(left_center, 4.0f, IM_COL32(255, 50, 50, 255));
+            draw_list->AddLine(target_center, left_center, IM_COL32(255, 50, 50, 255), 2.f);
+            draw_list->AddCircleFilled(left_center, 4.f, IM_COL32(255, 50, 50, 255));
         }
 
         // Right Child blue.
         if (target.right_child != std::numeric_limits<uint32_t>::max()) {
             ImVec2 right_center = GetAabbCenter(nodes[target.right_child].aabb);
             right_center = {right_center.x * physics_config::kPpm, window_height - right_center.y * physics_config::kPpm};
-            draw_list->AddLine(target_center, right_center, IM_COL32(50, 150, 255, 255), 2.0f);
-            draw_list->AddCircleFilled(right_center, 4.0f, IM_COL32(50, 150, 255, 255));
+            draw_list->AddLine(target_center, right_center, IM_COL32(50, 150, 255, 255), 2.f);
+            draw_list->AddCircleFilled(right_center, 4.f, IM_COL32(50, 150, 255, 255));
         }
     }
 }

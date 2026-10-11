@@ -1,9 +1,6 @@
 #include <algorithm>
 
 #include "physics_world.h"
-
-#include <numbers>
-
 #include "collision_broad_phase.h"
 #include "movement_system.h"
 #include "collision_solver_system.h"
@@ -19,12 +16,12 @@ BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2&
     rots_.emplace_back(std::cos(rotation), std::sin(rotation));
     velocities_.emplace_back(velocity);
     angular_velocities_.emplace_back(angular_velocity);
-    forces_.emplace_back(Vec2{0.0f, 0.0f});
+    forces_.emplace_back(Vec2{0.f, 0.f});
     pseudo_velocities_.emplace_back(Vec2{0.f, 0.f});
     pseudo_angular_velocities_.emplace_back(0.f);
     
-    float inv_mass = mass == 0.0f ? 0.0f : 1.0f / mass;
-    float inv_inertia = inertia == 0.0f ? 0.0f : 1.0f / inertia;
+    float inv_mass = mass == 0.f ? 0.f : 1.f / mass;
+    float inv_inertia = inertia == 0.f ? 0.f : 1.f / inertia;
     rigid_bodies_.emplace_back(inv_mass, inv_inertia, restitution, friction);
     
     return {new_id};
@@ -44,7 +41,7 @@ BodyHandle PhysicsWorld::CreateBox(const Vec2& pos, const float rotation, const 
     shapes_.push_back(BoxShape{half_width, half_height});
     const float width = half_width * 2;
     const float height = half_height * 2;
-    const float inertia = (1.0f / 12.0f) * mass * (width * width + height * height);
+    const float inertia = (1.f / 12.f) * mass * (width * width + height * height);
     return CreateBody(pos, rotation, velocity, angular_velocity, mass, inertia, restitution, friction);
 }
 
@@ -66,55 +63,55 @@ BodyHandle PhysicsWorld::CreatePolygon(const Vec2& pos, const float rotation, co
     return CreateBody(pos, rotation, velocity, angular_velocity, mass, 1, restitution, friction);
 }
 
-uint32_t PhysicsWorld::AddParticle(PhysicsWorld& world, const Vec2& pos, const float inv_mass, const float friction)
+uint32_t PhysicsWorld::AddParticle(const Vec2& pos, const float inv_mass, const float friction)
 {
-    const uint32_t idx = world.particle_positions_.size();
-    world.particle_positions_.push_back(pos);
-    world.particle_prev_positions_.push_back(pos);
-    world.particle_velocities_.push_back(Vec2{0.0f, 0.0f});
-    world.particle_inv_masses_.push_back(inv_mass);
-    world.particle_forces_.push_back(Vec2{0.0f, 0.0f});
-    world.particle_frictions_.push_back(friction);
+    const uint32_t idx = particle_positions_.size();
+    particle_positions_.push_back(pos);
+    particle_prev_positions_.push_back(pos);
+    particle_velocities_.push_back(Vec2{0.f, 0.f});
+    particle_inv_masses_.push_back(inv_mass);
+    particle_forces_.push_back(Vec2{0.f, 0.f});
+    particle_frictions_.push_back(friction);
     return idx;
 }
 
-uint32_t PhysicsWorld::AddDistanceConstraint(PhysicsWorld& world, const uint32_t p1, const uint32_t p2, const float compliance)
+uint32_t PhysicsWorld::AddDistanceConstraint(const uint32_t p1, const uint32_t p2, const float compliance)
 {
-    const uint32_t idx = world.distance_constraints_.size();
-    const float rest_len = (world.particle_positions_[p1] - world.particle_positions_[p2]).Length();
-    world.distance_constraints_.emplace_back(p1, p2, rest_len, compliance, 0.0f);
+    const uint32_t idx = distance_constraints_.size();
+    const float rest_len = (particle_positions_[p1] - particle_positions_[p2]).Length();
+    distance_constraints_.emplace_back(p1, p2, rest_len, compliance, 0.f);
     return idx;
 }
 
-uint32_t PhysicsWorld::AddTriangleAreaConstraint(PhysicsWorld& world, uint32_t p1, uint32_t p2, uint32_t p3, float compliance)
+uint32_t PhysicsWorld::AddTriangleAreaConstraint(uint32_t p1, uint32_t p2, uint32_t p3, float compliance)
 {
-    const uint32_t idx = world.triangle_area_constraints_.size();
-    const Vec2 pos_p1 = world.particle_positions_[p1];
-    const Vec2 pos_p2 = world.particle_positions_[p2];
-    const Vec2 pos_p3 = world.particle_positions_[p3];
+    const uint32_t idx = triangle_area_constraints_.size();
+    const Vec2 pos_p1 = particle_positions_[p1];
+    const Vec2 pos_p2 = particle_positions_[p2];
+    const Vec2 pos_p3 = particle_positions_[p3];
     float area = 0.5f * (pos_p1.x * (pos_p3.y - pos_p2.y) + pos_p2.x * (pos_p1.y - pos_p3.y) + pos_p3.x * (pos_p2.y - pos_p1.y));
-    world.triangle_area_constraints_.emplace_back(p1, p2, p3, area, compliance, 0.f);
+    triangle_area_constraints_.emplace_back(p1, p2, p3, area, compliance, 0.f);
     return idx;
 }
 
-uint32_t PhysicsWorld::AddGlobalAreaConstraint(PhysicsWorld& world, uint32_t start_particle_idx, uint16_t particle_count,
-    float compliance)
+uint32_t PhysicsWorld::AddGlobalAreaConstraint(uint32_t start_particle_idx, uint16_t particle_count,
+                                               float compliance)
 {
-    const uint32_t idx = world.global_area_constraints_.size();
+    const uint32_t idx = global_area_constraints_.size();
     
-    float rest_area = 0.0f;
+    float rest_area = 0.f;
     for (uint32_t i = 0; i < particle_count; ++i)
     {
         const uint32_t curr = start_particle_idx + i;
         const uint32_t next = start_particle_idx + ((i + 1) % particle_count);
-        const Vec2& p1 = world.particle_positions_[curr];
-        const Vec2& p2 = world.particle_positions_[next];
+        const Vec2& p1 = particle_positions_[curr];
+        const Vec2& p2 = particle_positions_[next];
         
         rest_area += (p2.x * p1.y - p1.x * p2.y);
     }
     rest_area *= 0.5f;
     
-    world.global_area_constraints_.emplace_back(start_particle_idx, particle_count, rest_area, compliance, 0.0f);
+    global_area_constraints_.emplace_back(start_particle_idx, particle_count, rest_area, compliance, 0.f);
     return idx;
 }
 
@@ -149,7 +146,7 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
     handle.surface_particle_count = segments + 1;
 
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
-    const float inv_particle_mass = particle_mass > 0.0f ? 1.0f / particle_mass : 0.0f;
+    const float inv_particle_mass = particle_mass > 0.f ? 1.f / particle_mass : 0.f;
     const Vec2 step = (end - start) / static_cast<float>(segments);
 
     // Create Particles
@@ -159,9 +156,9 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
         float current_inv_particle_mass = inv_particle_mass;
         if ((i == 0 && fix_start) || (i == segments && fix_end))
         {
-            current_inv_particle_mass = 0.0f; // Mass of fixed particle is infinity
+            current_inv_particle_mass = 0.f; // Mass of fixed particle is infinity
         }
-        AddParticle(*this, pos, current_inv_particle_mass, friction);
+        AddParticle(pos, current_inv_particle_mass, friction);
     }
 
     // Create distance constraints
@@ -169,7 +166,7 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
     {
         const uint32_t p1 = handle.start_particle_idx + i;
         const uint32_t p2 = handle.start_particle_idx + i + 1;
-        AddDistanceConstraint(*this, p1, p2, compliance);
+        AddDistanceConstraint(p1, p2, compliance);
         surface_edges_.emplace_back(p1, p2);
     }
 
@@ -193,7 +190,7 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
     handle.surface_particle_count = res_x * 2 + res_y * 2 - 4;
 
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
-    const float inv_mass = particle_mass > 0.0f ? 1.0f / particle_mass : 0.0f;
+    const float inv_mass = particle_mass > 0.f ? 1.f / particle_mass : 0.f;
 
     const Vec2 half_extents{width * 0.5f, height * 0.5f};
     const Vec2 min_pos = pos - half_extents;
@@ -205,7 +202,7 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
     auto add_and_map_particle = [&](const uint16_t x, const uint16_t y) {
         const Vec2 p_pos = min_pos + Vec2{step.x * static_cast<float>(x), step.y * static_cast<float>(y)};
         const uint32_t current_idx = static_cast<uint32_t>(particle_positions_.size());
-        AddParticle(*this, p_pos, inv_mass, friction);
+        AddParticle(p_pos, inv_mass, friction);
         grid_idx[y * res_x + x] = current_idx;
     };
 
@@ -251,18 +248,18 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
 
             // Structural Springs
             if (y == 0){
-                AddDistanceConstraint(*this, p00, p10, compliance);
+                AddDistanceConstraint(p00, p10, compliance);
             }
             if (x == 0){
-                AddDistanceConstraint(*this, p00, p01, compliance);
+                AddDistanceConstraint(p00, p01, compliance);
             } 
                 
-            AddDistanceConstraint(*this, p10, p11, compliance);
-            AddDistanceConstraint(*this, p01, p11, compliance);
+            AddDistanceConstraint(p10, p11, compliance);
+            AddDistanceConstraint(p01, p11, compliance);
 
             // Triangle Area Constraints
-            AddTriangleAreaConstraint(*this, p00, p11, p10, 0.0f); 
-            AddTriangleAreaConstraint(*this, p00, p01, p11, 0.0f);
+            AddTriangleAreaConstraint(p00, p11, p10, 0.f); 
+            AddTriangleAreaConstraint(p00, p01, p11, 0.f);
         }
     }
 
@@ -302,10 +299,10 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
     handle.surface_particle_count = segments;
 
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
-    const float inv_mass = particle_mass > 0.0f ? 1.0f / particle_mass : 0.0f;
+    const float inv_mass = particle_mass > 0.f ? 1.f / particle_mass : 0.f;
 
     // Center Particle
-    const uint32_t center_idx = AddParticle(*this, pos, inv_mass, friction);
+    const uint32_t center_idx = AddParticle(pos, inv_mass, friction);
 
     // Clockwise Outer Ring Particles
     static constexpr float two_pi = 6.28318530718f;
@@ -313,7 +310,7 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
     {
         const float angle = -(static_cast<float>(i) * two_pi) / static_cast<float>(segments);
         Vec2 p_pos = pos + Vec2{std::cos(angle) * radius, std::sin(angle) * radius};
-        AddParticle(*this, p_pos, inv_mass, friction);
+        AddParticle(p_pos, inv_mass, friction);
     }
 
     // Constraints
@@ -322,14 +319,14 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
         const uint32_t curr = handle.start_particle_idx + 1 + i;
         const uint32_t next = handle.start_particle_idx + 1 + ((i + 1) % segments);
 
-        AddDistanceConstraint(*this, handle.start_particle_idx, curr, compliance);
+        AddDistanceConstraint(handle.start_particle_idx, curr, compliance);
         
         // Outer Ring Distance  Constraint
-        AddDistanceConstraint(*this, curr, next, compliance);
+        AddDistanceConstraint(curr, next, compliance);
         surface_edges_.emplace_back(curr, next);
         
         // Internal Circular Sector Area Constraint (Clockwise)
-        AddTriangleAreaConstraint(*this, center_idx, curr, next, 0.0f);
+        AddTriangleAreaConstraint(center_idx, curr, next, 0.f);
     }
 
     soft_body_handles_.push_back(handle);
@@ -350,7 +347,7 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
     handle.surface_particle_count = segments;
     
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
-    const float inv_mass = particle_mass > 0.0f ? 1.0f / particle_mass : 0.0f;
+    const float inv_mass = particle_mass > 0.f ? 1.f / particle_mass : 0.f;
     
     // Clockwise Outer Ring Particles
     static constexpr float two_pi = 6.28318530718f;
@@ -358,7 +355,7 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
     {
         const float angle = -(static_cast<float>(i) * two_pi) / static_cast<float>(segments);
         Vec2 p_pos = pos + Vec2{std::cos(angle) * radius, std::sin(angle) * radius};
-        AddParticle(*this, p_pos, inv_mass, friction);
+        AddParticle(p_pos, inv_mass, friction);
     }
     
     // Constraints
@@ -369,11 +366,11 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
         surface_edges_.emplace_back(curr, next);
 
         // Outer Ring Distance Constraint
-        AddDistanceConstraint(*this, curr, next, compliance);
+        AddDistanceConstraint(curr, next, compliance);
     }
     
     // Internal Global Area Constraint
-    AddGlobalAreaConstraint(*this, handle.start_particle_idx, handle.particle_count, 0.f);
+    AddGlobalAreaConstraint(handle.start_particle_idx, handle.particle_count, 0.f);
     
     soft_body_handles_.push_back(handle);
     return handle;
@@ -423,8 +420,8 @@ void PhysicsWorld::CreateCar(const Vec2& pos, float wheel_radius, float wheel_ma
     rigid_particle_joint_constraints_.emplace_back(right_anchor, right_absorber_upper_particle_idx, car_body_idx);
     
     // Absorber-CarBody Angle Constraints
-    rigid_particle_angle_constraints_.emplace_back(Vec2{0.f, -1.f}, left_anchor, left_absorber_lower_particle_idx, car_body_idx, 1e-6f);
-    rigid_particle_angle_constraints_.emplace_back(Vec2{0.f, -1.f}, right_anchor, right_absorber_lower_particle_idx, car_body_idx, 1e-6f);
+    rigid_particle_angular_constraints_.emplace_back(Vec2{0.f, -1.f}, left_anchor, left_absorber_lower_particle_idx, car_body_idx, 1e-6f);
+    rigid_particle_angular_constraints_.emplace_back(Vec2{0.f, -1.f}, right_anchor, right_absorber_lower_particle_idx, car_body_idx, 1e-6f);
     
     // Add collision ignore
     rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(left_wheel_idx, left_absorber_handle_idx));
@@ -459,12 +456,12 @@ void PhysicsWorld::ApplyGravity()
 {
     for (int i = 0; i < rigid_bodies_.size(); ++i)
     {
-        forces_[i] += Vec2{0.0f, gravity_} / rigid_bodies_[i].inv_mass;
+        forces_[i] += Vec2{0.f, gravity_} / rigid_bodies_[i].inv_mass;
     }
     
     for (int i = 0; i < particle_forces_.size(); ++i)
     {
-        particle_forces_[i] += Vec2{0.0f, gravity_} / particle_inv_masses_[i];
+        particle_forces_[i] += Vec2{0.f, gravity_} / particle_inv_masses_[i];
     }
 }
 
@@ -512,7 +509,7 @@ void PhysicsWorld::Step(const float dt)
         {
             global_area_constraint.lambda = 0.f;
         }
-        for (auto& rigid_particle_angle_constraint : rigid_particle_angle_constraints_)
+        for (auto& rigid_particle_angle_constraint : rigid_particle_angular_constraints_)
         {
             rigid_particle_angle_constraint.lambda = 0.f;
         }
@@ -544,7 +541,7 @@ void PhysicsWorld::Step(const float dt)
                 }
             }
             XpbdSolver::SolveGlobalAreaConstraints(*this, inv_sdt_sq);
-            XpbdSolver::SolveRigidParticleAngleConstraints(*this, sub_dt);
+            XpbdSolver::SolveRigidParticleAngularConstraints(*this, sub_dt);
             XpbdSolver::SolveRigidParticleJointConstraints(*this, sub_dt);
             XpbdSolver::SolveRigidParticleCollisionConstraints(*this, sub_dt);
             XpbdSolver::SolveParticleEdgeCollisionConstraints(*this);
@@ -608,7 +605,7 @@ std::span<Vec2> PhysicsWorld::GetSoftBodyParticlePositions(const uint32_t i)
     return std::span(particle_positions_).subspan(soft_body_handle.start_particle_idx, soft_body_handle.particle_count);
 }
 
-std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i)
+std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const BoxShape& box_shape, uint32_t i)
 {
     // Vertices are arranged in clockwise.
     std::array<Vec2, 4> vertices = {
@@ -616,12 +613,12 @@ std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const PhysicsWorld& world, con
         Vec2{box_shape.half_width, -box_shape.half_height}, Vec2{-box_shape.half_width, -box_shape.half_height}
     };
     
-    std::ranges::transform(vertices, vertices.begin(), [&](const Vec2 v){ return world.rots_[i].Mul(v) + world.positions_[i].val; });
+    std::ranges::transform(vertices, vertices.begin(), [&](const Vec2 v){ return rots_[i].Mul(v) + positions_[i].val; });
     
     return vertices;
 }
 
-std::vector<Vec2> PhysicsWorld::GetBodyVertices(const PhysicsWorld& world, const PolygonShape& polygon_shape, uint32_t i)
+std::vector<Vec2> PhysicsWorld::GetBodyVertices(const PolygonShape& polygon_shape, uint32_t i)
 {
     return std::vector<Vec2>{};
 }
@@ -656,7 +653,7 @@ void PhysicsWorld::ClearWorld()
     manifolds_.clear();
     manifold_map_.clear();
     rigid_particle_joint_constraints_.clear();
-    rigid_particle_angle_constraints_.clear();
+    rigid_particle_angular_constraints_.clear();
     rigid_soft_collision_ignore_.clear();
     soft_soft_collision_ignore_.clear();
 }

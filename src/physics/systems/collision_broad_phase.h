@@ -1,6 +1,5 @@
 #pragma once
 #include <algorithm>
-#include <memory_resource>
 #include <vector>
 #include <span>
 
@@ -49,7 +48,8 @@ private:
         return node_index;
     }
     
-    static void QueryBvh(PhysicsWorld& world, std::span<Aabb> world_aabbs, uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
+    static void QueryBvh(PhysicsWorld& world, std::span<Aabb> world_aabbs, uint32_t query_obj_idx, 
+        std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
     static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, Rot rot, const Aabb& local_aabb);
     
     static uint32_t ExpandBits(uint32_t bits){
@@ -64,8 +64,8 @@ private:
     static uint32_t GetMortonCode(const Vec2& pos, const float min_x, const float min_y, const float inv_scene_aabb_width, const float inv_scene_aabb_height)
     {
         // Clamp to avoid floating-point precision issues.
-        const float norm_x = std::clamp((pos.x - min_x) * inv_scene_aabb_width, 0.0f, 1.0f);
-        const float norm_y = std::clamp((pos.y - min_y) * inv_scene_aabb_height, 0.0f, 1.0f);
+        const float norm_x = std::clamp((pos.x - min_x) * inv_scene_aabb_width, 0.f, 1.f);
+        const float norm_y = std::clamp((pos.y - min_y) * inv_scene_aabb_height, 0.f, 1.f);
 
         const uint32_t x = static_cast<uint32_t>(norm_x * 65535.f);
         const uint32_t y = static_cast<uint32_t>(norm_y * 65535.f);
@@ -83,4 +83,5 @@ private:
     
     friend CollisionDetectionSystem;
     friend CollisionNarrowPhase;
+    friend PhysicsWorld;
 };
