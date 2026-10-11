@@ -5,6 +5,8 @@
 #include "physics_world.h"
 #include "xpbd_solver_system.h"
 
+#include <numbers>
+
 void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
 {
     const uint32_t count = world.particle_positions_.size();
@@ -155,9 +157,9 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
     }
 }
 
-void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float sub_dt)
+void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, const float sub_dt)
 {
-    for (auto& c : world.particle_rigid_contacts_)
+    for (auto& c : world.rigid_particle_collision_constraints_)
     {
         const float w_particle = world.particle_inv_masses_[c.particle_idx];
         
@@ -218,7 +220,7 @@ void XpbdSolver::SolveCollisionConstraints(PhysicsWorld& world, const float sub_
 
 void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
 {
-    for (const auto& c : world.particle_edge_contacts_) {
+    for (const auto& c : world.particle_edge_collision_constraints_) {
         Vec2& p_pos = world.particle_positions_[c.body_a_particle_idx];
         Vec2& a_pos = world.particle_positions_[c.body_b_p1_idx];
         Vec2& b_pos = world.particle_positions_[c.body_b_p2_idx];
@@ -271,6 +273,94 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
         p_pos -= tangent_dir * delta_lambda_t * w_p;
         a_pos += tangent_dir * delta_lambda_t * (1.f - c.t) * w_a;
         b_pos += tangent_dir * delta_lambda_t * c.t * w_b;
+    }
+}
+
+void XpbdSolver::SolveRigidParticleJointConstraints(PhysicsWorld& world, const float sub_dt)
+{
+    for (auto& c : world.rigid_particle_joint_constraints_)
+    {
+        const float w_particle = world.particle_inv_masses_[c.particle_idx];
+        Vec2& particle_pos = world.particle_positions_[c.particle_idx];
+        
+        // Get joint point of rigid body in world space.
+        Vec2 rb = world.rots_[c.body_idx].Mul(c.body_local_anchor);
+        Vec2 body_anchor_world = rb + world.positions_[c.body_idx].val; 
+        
+        // Calculate C.
+        Vec2 body_anchor_to_particle = particle_pos - body_anchor_world;
+        float C = body_anchor_to_particle.Length();
+        if (C < 1e-6f && C > -1e-6f) continue;
+        
+        // Get Gradient.
+        Vec2 dir = body_anchor_to_particle / C;
+        
+        const auto& rigid_body = world.rigid_bodies_[c.body_idx];
+        const float rb_cross_n = rb.Cross(dir);
+        const float w_rigid = rigid_body.inv_mass + rigid_body.inv_inertia * (rb_cross_n * rb_cross_n);
+        const float w_sum = w_particle + w_rigid;
+        
+        if (w_sum <= 1e-6f) continue;
+            
+
+        const float delta_lambda = -C / w_sum;
+
+        // Move particle
+        particle_pos += dir * (delta_lambda * w_particle);
+        
+        // Update rigid velocity (linear + angular)
+        Vec2 impulse_n = dir * (delta_lambda / sub_dt);
+        world.velocities_[c.body_idx].val -= impulse_n * rigid_body.inv_mass;
+        world.angular_velocities_[c.body_idx].val -= rigid_body.inv_inertia * rb.Cross(impulse_n);
+    }
+}
+
+void XpbdSolver::SolveRigidParticleAngleConstraints(PhysicsWorld& world, const float sub_dt)
+{
+    for (auto& c : world.rigid_particle_angle_constraints_)
+    {
+        // Convert anchor to world space.
+        const Vec2 anchor_offset = world.rots_[c.body_idx].Mul(c.anchor_local);
+        const Vec2 anchor_world = anchor_offset + world.positions_[c.body_idx].val;
+
+        // Anchor to Particle.
+        const Vec2 r = world.particle_positions_[c.particle_idx] - anchor_world;
+
+        const float r_sq = r.LengthSquared();
+        if (r_sq < 1e-8f) return;
+
+        // Convert rest angle direction to world space 
+        const Vec2 rest_direction_world = world.rots_[c.body_idx].Mul(c.rest_direction_local);
+        
+        // Calculate angle Constraint C (Use Cross Product to save std::atan2 overhead)
+        Vec2 r_normalized = r / std::sqrt(r_sq);
+        const float C = rest_direction_world.Cross(r_normalized);
+        
+        // Gradients
+        // Gradient of position correction only need direction, because they're reverse vector, anchor and particle move along gradient cause same delta_C
+        const Vec2 grad_particle_dir = r_normalized.NormalWithoutNormalized();
+        const float grad_body_rot = grad_particle_dir.Cross(anchor_offset);
+        
+        const RigidBodyComponent rigid_body = world.rigid_bodies_[c.body_idx];
+        const float w_particle = world.particle_inv_masses_[c.particle_idx];
+        const float w_rigid = rigid_body.inv_mass + rigid_body.inv_inertia * grad_body_rot * grad_body_rot;
+        const float w_sum = w_particle + w_rigid;
+
+        const float alpha = c.compliance / (sub_dt * sub_dt);
+        const float denominator = w_sum + alpha;
+
+        if (denominator < 1e-8f) return;
+        
+        const float delta_lambda = (-C - alpha * c.lambda) / denominator;
+        c.lambda += delta_lambda;
+
+        // Move particle
+        world.particle_positions_[c.particle_idx] += grad_particle_dir * (world.particle_inv_masses_[c.particle_idx] * delta_lambda);
+
+        // Update rigid velocity (linear + angular)
+        const float impulse_magnitude = delta_lambda / sub_dt;
+        world.velocities_[c.body_idx].val -= grad_particle_dir * impulse_magnitude * rigid_body.inv_mass;
+        world.angular_velocities_[c.body_idx].val -= rigid_body.inv_inertia * anchor_offset.Cross(grad_particle_dir * impulse_magnitude);
     }
 }
 

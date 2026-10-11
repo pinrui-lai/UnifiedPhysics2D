@@ -93,14 +93,30 @@ struct XpbdDistanceConstraint
     float lambda{0.0f};
 };
 
-// Rigid-Particle Collision Constraint
-struct XpbdContactConstraint
+struct XpbdRigidParticleCollisionConstraint
 {
     uint32_t particle_idx;
     uint32_t body_idx;
     Vec2 contact_normal;
     Vec2 contact_point;
     float depth;
+};
+
+struct XpbdRigidParticleJointConstraint
+{
+    Vec2 body_local_anchor;
+    uint32_t particle_idx;
+    uint32_t body_idx;
+};
+
+struct XpbdRigidParticleAngleConstraint
+{
+    Vec2 rest_direction_local;
+    Vec2 anchor_local;
+    uint32_t particle_idx;
+    uint32_t body_idx;
+    float compliance = 0.f;
+    float lambda = 0.f;
 };
 
 struct XpbdTriangleAreaConstraint
