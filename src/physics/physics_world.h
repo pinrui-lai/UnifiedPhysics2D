@@ -3,6 +3,7 @@
 #include <memory_resource>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "components.h"
@@ -85,11 +86,15 @@ private:
     std::vector<XpbdDistanceConstraint> distance_constraints_;
     std::vector<XpbdTriangleAreaConstraint> triangle_area_constraints_;
     std::vector<XpbdGlobalAreaConstraint> global_area_constraints_;
-    std::vector<XpbdContactConstraint> particle_rigid_contacts_;
-    std::vector<XpbdParticleEdgeCollisionConstraint> particle_edge_contacts_;
+    std::vector<XpbdRigidParticleCollisionConstraint> rigid_particle_collision_constraints_;
+    std::vector<XpbdParticleEdgeCollisionConstraint> particle_edge_collision_constraints_;
+    std::vector<XpbdRigidParticleJointConstraint> rigid_particle_joint_constraints_;
+    std::vector<XpbdRigidParticleAngleConstraint> rigid_particle_angle_constraints_;
     std::vector<Aabb> particle_aabbs_;
     std::vector<Aabb> surface_edge_aabbs_;
     std::vector<std::pmr::vector<BvhNode>> soft_body_surface_particle_bvhs_;
+    std::unordered_set<uint64_t> rigid_soft_collision_ignore_;
+    std::unordered_set<uint64_t> soft_soft_collision_ignore_;
     
     std::vector<std::byte> buffer_;
     std::pmr::monotonic_buffer_resource frame_arena_;
@@ -107,10 +112,16 @@ public:
     static uint32_t AddDistanceConstraint(PhysicsWorld& world, uint32_t p1, uint32_t p2, float compliance);
     static uint32_t AddTriangleAreaConstraint(PhysicsWorld& world, uint32_t p1, uint32_t p2, uint32_t p3, float compliance);
     static uint32_t AddGlobalAreaConstraint(PhysicsWorld& world, uint32_t start_particle_idx, uint16_t particle_count, float compliance);
+    uint32_t AddRigidParticleJointConstraint(uint32_t particle_idx, uint32_t rigid_idx, Vec2 anchor_local);
+    void AddSoftSoftCollisionIgnore(uint32_t body_idx1, uint32_t body_idx2);
+    void AddRigidSoftCollisionIgnore(uint32_t rigid_idx, uint32_t soft_idx);
     SoftBodyHandle CreateRope(const Vec2& start, const Vec2& end, uint16_t segments, float mass, float friction, float compliance = 0.0f, bool fix_start = true, bool fix_end = false);
     SoftBodyHandle CreateSoftBox(const Vec2& pos, float width, float height, uint16_t res_x, uint16_t res_y, float mass, float friction, float compliance);
     SoftBodyHandle CreateSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
     SoftBodyHandle CreatePressureSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
+    void CreateCar(const Vec2& pos, float wheel_radius, float wheel_mass, float wheel_friction, float wheel_restitution,
+                   float absorber_height, float absorber_mass, float absorber_compliance,
+                   float car_body_width, float car_body_height, float car_body_mass, float car_body_restitution, float car_body_friction);
     
     void ApplyForce(BodyHandle handle, const Vec2& force);
     void ApplyForceToAll(const Vec2& force);
@@ -127,8 +138,8 @@ public:
     const std::vector<Vec2>& GetParticlePositions() { return particle_positions_; }
     const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
     const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
-    auto GetParticleRigidContactsSize() const { return particle_rigid_contacts_.size(); }
-    auto GetParticleEdgeContactsSize() const { return particle_edge_contacts_.size(); }
+    auto GetParticleRigidConstraintsSize() const { return rigid_particle_collision_constraints_.size(); }
+    auto GetParticleEdgeConstraintsSize() const { return particle_edge_collision_constraints_.size(); }
     static std::array<Vec2, 4> GetBodyVertices(const PhysicsWorld& world, const BoxShape& box_shape, uint32_t i);
     static std::vector<Vec2> GetBodyVertices(const PhysicsWorld& world, const PolygonShape& polygon_shape, uint32_t i);
     const std::vector<std::pmr::vector<BvhNode>>& GetSubBvhs(){return soft_body_surface_particle_bvhs_;}
@@ -138,7 +149,7 @@ public:
     void SetRestitution(const BodyHandle handle, const float restitution) { rigid_bodies_[handle.id].restitution = restitution; }
     void SetFriction(const BodyHandle handle, const float friction) { rigid_bodies_[handle.id].friction = friction; }
     
-    void ResetWorld();
+    void ClearWorld();
     
     float gravity_;
     std::vector<BvhNode> bvh_tree_nodes_;

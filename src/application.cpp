@@ -63,6 +63,37 @@ void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
     rope_start_pos.y += 5.f;
     const Vec2 rope_end_pos{rope_start_pos.x + 12.f, rope_start_pos.y};
     world.CreateRope(rope_start_pos, rope_end_pos, physics_config::kSubBvhThreshold + 1,  20, 0.5f, 0.00001f, true, true);
+    
+    // Hanging Body 1
+    constexpr uint32_t hang_rope_segments = 5;
+    const uint32_t hang_rope_start_idx = world.GetParticlePositions().size();
+    const uint32_t hang_rope_end_idx = hang_rope_start_idx  + hang_rope_segments;
+    const Vec2 hang_rope_start_pos{static_cast<float>(w) * physics_config::kMpp * 0.2f, ceil_pos.y - 1.f};
+    const Vec2 hang_rope_end_pos{hang_rope_start_pos.x, hang_rope_start_pos.y - 2.f};
+    const uint32_t hang_rope_handle_idx = world.GetSoftBodyHandles().size();
+    world.CreateRope(hang_rope_start_pos, hang_rope_end_pos, hang_rope_segments, 2.0f, 0.5f, 0.00001f, true, false);
+
+    constexpr float hang_soft_box_extent = 0.8f;
+    const uint32_t hang_top_left_particle_idx = world.GetParticlePositions().size();
+    const uint32_t hang_soft_box_handle_idx = world.GetSoftBodyHandles().size();
+    world.CreateSoftBox({hang_rope_end_pos.x + hang_soft_box_extent, hang_rope_end_pos.y - hang_soft_box_extent},
+        hang_soft_box_extent * 2.f, hang_soft_box_extent * 2.f, 5, 5, 5.f, 0.5f, 0.001f);
+    PhysicsWorld::AddDistanceConstraint(world, hang_rope_end_idx, hang_top_left_particle_idx, 0.f);
+    world.AddSoftSoftCollisionIgnore(hang_rope_handle_idx, hang_soft_box_handle_idx);
+    
+    // // Hanging Body 2
+    constexpr uint32_t hang_rope2_segments = 5;
+    const uint32_t hang_rope2_start_idx = world.GetParticlePositions().size();
+    const uint32_t hang_rope2_end_idx = hang_rope2_start_idx  + hang_rope2_segments;
+    const Vec2 hang_rope2_start_pos{hang_rope_start_pos.x + 2.5f, ceil_pos.y - 1.f};
+    const Vec2 hang_rope2_end_pos{hang_rope2_start_pos.x, hang_rope2_start_pos.y - 3.f};
+    const uint32_t hang_rope2_handle_idx = world.GetSoftBodyHandles().size();
+    world.CreateRope(hang_rope2_start_pos, hang_rope2_end_pos, hang_rope2_segments, 2.0f, 0.5f, 0.00001f, true, false);
+
+    const uint32_t hang_box_idx = world.GetPositions().size();
+    world.CreateBox(hang_rope2_end_pos, 0.f, {0.f, 0.f}, 0.f, 3.f, 0.8f, 0.8f, 0.5f, 0.5f);
+    world.AddRigidParticleJointConstraint(hang_rope2_end_idx, hang_box_idx, {0.f, 0.f});
+    world.AddRigidSoftCollisionIgnore(hang_box_idx, hang_rope2_handle_idx);
 }
 
 void Application::Input(SDL_Window* window, bool& is_running, PhysicsWorld& world)
@@ -298,7 +329,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Begin("Physics Engine Control");
 
     ImGui::Text("FPS: %.1f, Render: %.5f ms\nNum Bodies: %d, Num Manifolds: %d\nNum Particle-Rigid Contacts: %d\nNum Particle-Edge Contacts: %d",
-        ImGui::GetIO().Framerate, render_time_ms, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size(), world.GetParticleRigidContactsSize(), world.GetParticleEdgeContactsSize());
+        ImGui::GetIO().Framerate, render_time_ms, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size(), world.GetParticleRigidConstraintsSize(), world.GetParticleEdgeConstraintsSize());
     
     ImGui::Spacing();
     ImGui::Text("Integrate Rigid Vel: %.5f ms\nPredict Particle Pos: %.5f ms",
@@ -399,7 +430,8 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
         "Soft Rope",
         "Soft Box",
         "Triangle Area Soft Circle",
-        "Pressure Soft Circle"
+        "Pressure Soft Circle",
+        "Car",
     };
     
     int left_idx = static_cast<int>(left_click_spawn_type_);
@@ -505,6 +537,12 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
             pressure_circle_spawn_mass_, pressure_circle_spawn_friction_, pressure_circle_spawn_compliance_
         );
         break;
+        
+    case SpawnType::Car:
+        world.CreateCar(spawn_pos, wheel_radius_, wheel_mass_, wheel_friction_, wheel_restitution_, absorber_height_,
+                        absorber_mass_, absorber_compliance_, car_body_width_,
+                        car_body_height_, car_body_mass_, car_body_restitution_, car_body_friction_);
+        break;
     }
 }
 
@@ -577,12 +615,29 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderFloat("Friction##pcircle", &pressure_circle_spawn_friction_, 0.0f, 1.0f);
         ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.0f, 0.001f, "%.7f");
         break;
+        
+    case SpawnType::Car:
+        ImGui::SameLine();
+        ImGui::Text("Car");
+        ImGui::SliderFloat("Wheel Radius##car", &wheel_radius_, 0.5f, 2.0f);
+        ImGui::SliderFloat("Wheel Mass##car", &wheel_mass_, 0.1f, 50.f);
+        ImGui::SliderFloat("Wheel Friction##car", &wheel_friction_, 0.0f, 1.0f);
+        ImGui::SliderFloat("Wheel Restitution##car", &wheel_restitution_, 0.0f, 1.f);
+        ImGui::SliderFloat("Absorber Height##car", &absorber_height_, 0.5f, 5.0f);
+        ImGui::SliderFloat("Absorber Mass##car", &absorber_mass_, 0.1f, 50.f);
+        ImGui::SliderFloat("Absorber Compliance##car", &absorber_compliance_, 0.0f, 0.001f, "%.7f");
+        ImGui::SliderFloat("Car Body Width##car", &car_body_width_, 1.0f, 10.f);
+        ImGui::SliderFloat("Car Body Height##car", &car_body_height_, 0.5f, 5.0f);
+        ImGui::SliderFloat("Car Body Mass##car", &car_body_mass_, 0.1f, 50.f);
+        ImGui::SliderFloat("Car Body Restitution##car", &car_body_restitution_, 0.0f, 1.0f);
+        ImGui::SliderFloat("Car Body Friction##car", &car_body_friction_, 0.0f, 1.f);
+        break;
     }
 }
 
 void Application::ResetWorld(SDL_Window* window, PhysicsWorld& world)
 {
-    world.ResetWorld();
+    world.ClearWorld();
     CreateInitialBodies(window, world);
 }
 

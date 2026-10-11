@@ -1,6 +1,10 @@
 #include <algorithm>
 
 #include "physics_world.h"
+
+#include <numbers>
+
+#include "collision_broad_phase.h"
 #include "movement_system.h"
 #include "collision_solver_system.h"
 #include "collision_detection_system.h"
@@ -112,6 +116,23 @@ uint32_t PhysicsWorld::AddGlobalAreaConstraint(PhysicsWorld& world, uint32_t sta
     
     world.global_area_constraints_.emplace_back(start_particle_idx, particle_count, rest_area, compliance, 0.0f);
     return idx;
+}
+
+uint32_t PhysicsWorld::AddRigidParticleJointConstraint(uint32_t particle_idx, uint32_t rigid_idx, Vec2 anchor_local)
+{
+    const uint32_t idx = rigid_particle_joint_constraints_.size();
+    rigid_particle_joint_constraints_.emplace_back(anchor_local, particle_idx, rigid_idx);
+    return idx;
+}
+
+void PhysicsWorld::AddSoftSoftCollisionIgnore(const uint32_t body_idx1, const uint32_t body_idx2)
+{
+    soft_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(body_idx1, body_idx2));
+}
+
+void PhysicsWorld::AddRigidSoftCollisionIgnore(const uint32_t rigid_idx, const uint32_t soft_idx)
+{
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(rigid_idx, soft_idx));
 }
 
 SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, const uint16_t segments, const float mass,
@@ -358,6 +379,60 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
     return handle;
 }
 
+void PhysicsWorld::CreateCar(const Vec2& pos, float wheel_radius, float wheel_mass, float wheel_friction, float wheel_restitution,
+                             float absorber_height, float absorber_mass, float absorber_compliance,
+                             float car_body_width, float car_body_height, float car_body_mass, float car_body_restitution, float car_body_friction)
+{
+    // Left Wheel
+    const uint32_t left_wheel_idx = positions_.size();
+    CreateCircle(pos, 0.f, {0.f, 0.f}, 0.f, wheel_mass, wheel_radius, wheel_restitution, wheel_friction);
+    
+    // Right Wheel
+    const uint32_t right_wheel_idx = positions_.size();
+    CreateCircle({pos.x + car_body_width, pos.y}, 0.f, {0.f, 0.f}, 0.f, wheel_mass, wheel_radius, wheel_restitution, wheel_friction);
+    
+    // Left Absorber
+    Vec2 left_wheel_center_pos = positions_[left_wheel_idx].val;
+    uint32_t left_absorber_upper_particle_idx = particle_positions_.size();
+    const uint32_t left_absorber_lower_particle_idx = particle_positions_.size() + 1;
+    const uint32_t left_absorber_handle_idx = soft_body_handles_.size();
+    CreateRope({left_wheel_center_pos.x, left_wheel_center_pos.y + absorber_height}, left_wheel_center_pos, 
+        1, absorber_mass, 0.f, absorber_compliance, false, false);
+    
+    // Right Absorber
+    Vec2 right_wheel_center_pos = positions_[right_wheel_idx].val;
+    uint32_t right_absorber_upper_particle_idx = particle_positions_.size();
+    const uint32_t right_absorber_lower_particle_idx = particle_positions_.size() + 1;
+    const uint32_t right_absorber_handle_idx = soft_body_handles_.size();
+    CreateRope({right_wheel_center_pos.x, right_wheel_center_pos.y + absorber_height}, right_wheel_center_pos, 
+        1, absorber_mass, 0.f, absorber_compliance, false, false);
+    
+    // Car Body
+    uint32_t car_body_idx = positions_.size();
+    CreateBox({pos.x + car_body_width * 0.5f, pos.y + absorber_height + car_body_height * 0.5f}, 0.f,
+{0.f, 0.f}, 0.f,  car_body_mass, car_body_width * 0.5f, car_body_height * 0.5f, car_body_restitution, car_body_friction);
+    
+    // Absorber-Wheel Joint Constraints
+    AddRigidParticleJointConstraint(left_absorber_lower_particle_idx, left_wheel_idx, {0.f, 0.f});
+    AddRigidParticleJointConstraint(right_absorber_lower_particle_idx, right_wheel_idx, {0.f, 0.f});
+    
+    // Absorber-CarBody Joint Constraints
+    Vec2 left_anchor{-car_body_width * 0.5f, -car_body_height * 0.5f};
+    Vec2 right_anchor{car_body_width * 0.5f, -car_body_height * 0.5f};
+    rigid_particle_joint_constraints_.emplace_back(left_anchor, left_absorber_upper_particle_idx, car_body_idx);
+    rigid_particle_joint_constraints_.emplace_back(right_anchor, right_absorber_upper_particle_idx, car_body_idx);
+    
+    // Absorber-CarBody Angle Constraints
+    rigid_particle_angle_constraints_.emplace_back(Vec2{0.f, -1.f}, left_anchor, left_absorber_lower_particle_idx, car_body_idx, 1e-6f);
+    rigid_particle_angle_constraints_.emplace_back(Vec2{0.f, -1.f}, right_anchor, right_absorber_lower_particle_idx, car_body_idx, 1e-6f);
+    
+    // Add collision ignore
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(left_wheel_idx, left_absorber_handle_idx));
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(right_wheel_idx, right_absorber_handle_idx));
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(car_body_idx, left_absorber_handle_idx));
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(car_body_idx, right_absorber_handle_idx));
+}
+
 void PhysicsWorld::ApplyForce(const BodyHandle handle, const Vec2& force)
 {
     forces_[handle.id] += force;
@@ -409,8 +484,8 @@ void PhysicsWorld::Step(const float dt)
     for (int sub_step = 0; sub_step < sub_steps; ++sub_step)
     {
         frame_arena_.release();
-        particle_rigid_contacts_.clear();
-        particle_edge_contacts_.clear();
+        rigid_particle_collision_constraints_.clear();
+        particle_edge_collision_constraints_.clear();
         
         ApplyGravity();
         
@@ -436,6 +511,10 @@ void PhysicsWorld::Step(const float dt)
         for (auto& global_area_constraint : global_area_constraints_)
         {
             global_area_constraint.lambda = 0.f;
+        }
+        for (auto& rigid_particle_angle_constraint : rigid_particle_angle_constraints_)
+        {
+            rigid_particle_angle_constraint.lambda = 0.f;
         }
         
         for (int iter = 0; iter < xpbd_iterations; ++iter)
@@ -465,7 +544,9 @@ void PhysicsWorld::Step(const float dt)
                 }
             }
             XpbdSolver::SolveGlobalAreaConstraints(*this, inv_sdt_sq);
-            XpbdSolver::SolveCollisionConstraints(*this, sub_dt);
+            XpbdSolver::SolveRigidParticleAngleConstraints(*this, sub_dt);
+            XpbdSolver::SolveRigidParticleJointConstraints(*this, sub_dt);
+            XpbdSolver::SolveRigidParticleCollisionConstraints(*this, sub_dt);
             XpbdSolver::SolveParticleEdgeCollisionConstraints(*this);
         }
         profile_data_.solve_xpbd_constraints_ms += Duration(Clock::now() - start).count();
@@ -545,7 +626,7 @@ std::vector<Vec2> PhysicsWorld::GetBodyVertices(const PhysicsWorld& world, const
     return std::vector<Vec2>{};
 }
 
-void PhysicsWorld::ResetWorld()
+void PhysicsWorld::ClearWorld()
 {
     rigid_bodies_.clear();
     forces_.clear();
@@ -574,4 +655,8 @@ void PhysicsWorld::ResetWorld()
     bvh_tree_nodes_.clear();
     manifolds_.clear();
     manifold_map_.clear();
+    rigid_particle_joint_constraints_.clear();
+    rigid_particle_angle_constraints_.clear();
+    rigid_soft_collision_ignore_.clear();
+    soft_soft_collision_ignore_.clear();
 }

@@ -11,7 +11,8 @@ enum class SpawnType {
     SoftRope,
     SoftBox,
     SoftCircleArea,
-    SoftCirclePressure
+    SoftCirclePressure,
+    Car
 };
 
 class Application
@@ -72,7 +73,7 @@ private:
     float box_spawn_half_width_{1.f};
     float box_spawn_half_height_{1.f};
     float box_spawn_restitution_{0.2f};
-    float box_spawn_friction_{0.5f};
+    float box_spawn_friction_{0.3f};
     
     // Soft Rope
     bool fix_start_{true};
@@ -106,6 +107,20 @@ private:
     float pressure_circle_spawn_mass_{10.f};
     float pressure_circle_spawn_friction_{0.5f};
     float pressure_circle_spawn_compliance_{0.f};
+    
+    // Car
+    float wheel_radius_{0.7f};
+    float wheel_mass_{15.f};
+    float wheel_friction_{0.7f};
+    float wheel_restitution_{0.05f};
+    float absorber_height_{1.5f};
+    float absorber_mass_{3.5f};
+    float absorber_compliance_{0.0005f};
+    float car_body_width_{4.f};
+    float car_body_height_{1.f};
+    float car_body_mass_{50.f};
+    float car_body_restitution_{0.f};
+    float car_body_friction_{0.2f};
     
     // ===== Others =====
     float arrow_key_force_{800.f};
