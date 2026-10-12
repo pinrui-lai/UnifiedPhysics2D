@@ -2,9 +2,9 @@
 #include <execution>
 #include <ranges>
 
-#include "collision_narrow_phase.h"
-#include "collision_broad_phase.h"
-#include "physics_world.h"
+#include "physics/collision/collision_narrow_phase.h"
+#include "physics/collision/collision_broad_phase.h"
+#include "physics/physics_world.h"
 
 namespace 
 {
@@ -495,7 +495,7 @@ void CollisionNarrowPhase::UpdateParticleEdgeAabbs(PhysicsWorld& world, const st
             };
         }
         
-        // Update soft body edge BVH
+        // Update soft body surface particle BVH
         if (body.surface_particle_count > physics_config::kSubBvhThreshold){
             CollisionBroadPhase::BuildSubBvh(std::span(world.particle_aabbs_).subspan(
                 body.start_surface_particle_idx, body.surface_particle_count), world.soft_body_surface_particle_bvhs_[body_idx]);    

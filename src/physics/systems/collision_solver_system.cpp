@@ -1,8 +1,8 @@
 #include <algorithm>
 
-#include "collision_solver_system.h"
-#include "components.h"
-#include "physics_world.h"
+#include "physics/systems/collision_solver_system.h"
+#include "physics/components.h"
+#include "physics/physics_world.h"
 
 void CollisionSolverSystem::SolveCollision(PhysicsWorld& world)
 {

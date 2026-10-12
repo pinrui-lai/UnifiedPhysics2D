@@ -3,7 +3,7 @@
 #include <vector>
 #include <span>
 
-#include "types.h"
+#include "physics/types.h"
 
 class CollisionNarrowPhase;
 class CollisionDetectionSystem;

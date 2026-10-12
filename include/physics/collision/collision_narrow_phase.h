@@ -1,7 +1,7 @@
 #pragma once
 #include <span>
 
-#include "types.h"
+#include "physics/types.h"
 
 class PhysicsWorld;
 class CollisionDetectionSystem;

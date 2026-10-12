@@ -5,7 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include "application.h"
-#include "physics_config.h"
+#include "physics/physics_config.h"
 #include "physics/physics_world.h"
 
 int main(int argc, char* argv[]) {

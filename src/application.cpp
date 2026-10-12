@@ -5,8 +5,8 @@
 #include <imgui_impl_sdlrenderer3.h>
 
 #include "Application.h"
-#include "physics_config.h"
-#include "physics_world.h"
+#include "physics/physics_config.h"
+#include "physics/physics_world.h"
 
 void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world)
 {

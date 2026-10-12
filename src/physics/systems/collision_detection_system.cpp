@@ -1,10 +1,10 @@
 #include <algorithm>
 #include <execution>
 
-#include "collision_detection_system.h"
-#include "collision_broad_phase.h"
-#include "collision_narrow_phase.h"
-#include "physics_world.h"
+#include "physics/systems/collision_detection_system.h"
+#include "physics/collision/collision_broad_phase.h"
+#include "physics/collision/collision_narrow_phase.h"
+#include "physics/physics_world.h"
 
 void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
 {

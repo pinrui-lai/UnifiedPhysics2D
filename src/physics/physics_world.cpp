@@ -1,11 +1,11 @@
 #include <algorithm>
 
-#include "physics_world.h"
-#include "collision_broad_phase.h"
-#include "movement_system.h"
-#include "collision_solver_system.h"
-#include "collision_detection_system.h"
-#include "xpbd_solver_system.h"
+#include "physics/physics_world.h"
+#include "physics/collision/collision_broad_phase.h"
+#include "physics/systems/movement_system.h"
+#include "physics/systems/collision_solver_system.h"
+#include "physics/systems/collision_detection_system.h"
+#include "physics/systems/xpbd_solver_system.h"
 
 BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float inertia, float restitution, float friction)
 {

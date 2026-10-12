@@ -1,8 +1,8 @@
 #include <execution>
 #include <ranges>
 
-#include "physics_world.h"
-#include "collision_broad_phase.h"
+#include "physics/physics_world.h"
+#include "physics/collision/collision_broad_phase.h"
 
 void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs)
 {

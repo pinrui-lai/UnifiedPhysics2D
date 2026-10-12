@@ -2,8 +2,8 @@
 #include <execution>
 #include <ranges>
 
-#include "physics_world.h"
-#include "movement_system.h"
+#include "physics/physics_world.h"
+#include "physics/systems/movement_system.h"
 
 void MovementSystem::IntegrateVelocity(PhysicsWorld& world, const float dt)
 {

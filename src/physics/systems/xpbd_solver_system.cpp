@@ -2,8 +2,8 @@
 #include <execution>
 #include <ranges>
 
-#include "physics_world.h"
-#include "xpbd_solver_system.h"
+#include "physics/physics_world.h"
+#include "physics/systems/xpbd_solver_system.h"
 
 void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
 {

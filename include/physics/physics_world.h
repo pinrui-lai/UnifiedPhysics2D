@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "components.h"
-#include "../physics_config.h"
+#include "physics_config.h"
 
 class CollisionNarrowPhase;
 class CollisionBroadPhase;
