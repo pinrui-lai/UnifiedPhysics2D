@@ -59,7 +59,7 @@ void XpbdSolver::SolveDistanceConstraint(PhysicsWorld& world, const float inv_sd
     if (w2 > 0.f) world.particle_positions_[i2] -= dx * w2;
 }
 
-void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, float inv_sdt_sq, XpbdTriangleAreaConstraint& c)
+void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, const float inv_sdt_sq, XpbdTriangleAreaConstraint& c)
 {
     const uint32_t i1 = c.p1, i2 = c.p2, i3 = c.p3; // Clockwise
     
@@ -96,7 +96,7 @@ void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, float inv_sdt_
     if (w3 > 0.f) world.particle_positions_[i3] += grad3 * (w3 * delta_lambda);
 }
 
-void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_sq)
+void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, const float inv_sdt_sq)
 {
     // Particles arranged Clockwise.
     for (auto& c : world.global_area_constraints_)
@@ -155,7 +155,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, float inv_sdt_s
     }
 }
 
-void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, const float sub_dt)
+void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, const float sub_dt, const float inv_sub_dt)
 {
     for (auto& c : world.rigid_particle_collision_constraints_)
     {
@@ -179,14 +179,14 @@ void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, con
         world.particle_positions_[c.particle_idx] += c.contact_normal * (delta_lambda * w_particle);
         
         // Update rigid velocity (linear + angular)
-        Vec2 impulse_n = c.contact_normal * (delta_lambda / sub_dt);
+        Vec2 impulse_n = c.contact_normal * delta_lambda * inv_sub_dt;
         world.velocities_[c.body_idx].val -= impulse_n * rigid_body.inv_mass;
         world.angular_velocities_[c.body_idx].val -= rigid_body.inv_inertia * rb.Cross(impulse_n);
         
         // ===== Tangent Friction =====
         
         // Compute relative velocity
-        Vec2 particle_vel = (world.particle_positions_[c.particle_idx] - world.particle_prev_positions_[c.particle_idx]) / sub_dt;
+        Vec2 particle_vel = (world.particle_positions_[c.particle_idx] - world.particle_prev_positions_[c.particle_idx]) * inv_sub_dt;
         Vec2 rigid_contact_point_vel = world.velocities_[c.body_idx].val + Vec2::ZCross(world.angular_velocities_[c.body_idx].val, rb);
         Vec2 rel_vel = particle_vel - rigid_contact_point_vel;
         Vec2 rel_vel_tangent = rel_vel - c.contact_normal * rel_vel.Dot(c.contact_normal);
@@ -201,7 +201,7 @@ void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, con
         const float w_sum_t = w_particle + w_rigid_t;
         
         float j_t_desired = rel_vel_tangent_len / w_sum_t; // Magnitude of impulse on tangent direction
-        const float j_n_applied = delta_lambda / sub_dt; // Magnitude of impulse on normal direction
+        const float j_n_applied = delta_lambda * inv_sub_dt; // Magnitude of impulse on normal direction
         
         float max_friction = rigid_body.friction * j_n_applied;
         const float j_t_final = std::min(j_t_desired, max_friction);
@@ -274,7 +274,7 @@ void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
     }
 }
 
-void XpbdSolver::SolveRigidParticleJointConstraints(PhysicsWorld& world, const float sub_dt)
+void XpbdSolver::SolveRigidParticleJointConstraints(PhysicsWorld& world, const float inv_sub_dt)
 {
     for (auto& c : world.rigid_particle_joint_constraints_)
     {
@@ -307,13 +307,13 @@ void XpbdSolver::SolveRigidParticleJointConstraints(PhysicsWorld& world, const f
         particle_pos += dir * (delta_lambda * w_particle);
         
         // Update rigid velocity (linear + angular)
-        Vec2 impulse_n = dir * (delta_lambda / sub_dt);
+        Vec2 impulse_n = dir * delta_lambda * inv_sub_dt;
         world.velocities_[c.body_idx].val -= impulse_n * rigid_body.inv_mass;
         world.angular_velocities_[c.body_idx].val -= rigid_body.inv_inertia * rb.Cross(impulse_n);
     }
 }
 
-void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const float sub_dt)
+void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const float inv_sub_dt)
 {
     for (auto& c : world.rigid_particle_angular_constraints_)
     {
@@ -344,7 +344,7 @@ void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const
         const float w_rigid = rigid_body.inv_mass + rigid_body.inv_inertia * grad_body_rot * grad_body_rot;
         const float w_sum = w_particle + w_rigid;
 
-        const float alpha = c.compliance / (sub_dt * sub_dt);
+        const float alpha = c.compliance * inv_sub_dt * inv_sub_dt;
         const float denominator = w_sum + alpha;
 
         if (denominator < 1e-8f) return;
@@ -356,7 +356,7 @@ void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const
         world.particle_positions_[c.particle_idx] += grad_particle_dir * (world.particle_inv_masses_[c.particle_idx] * delta_lambda);
 
         // Update rigid velocity (linear + angular)
-        const float impulse_magnitude = delta_lambda / sub_dt;
+        const float impulse_magnitude = delta_lambda * inv_sub_dt;
         world.velocities_[c.body_idx].val -= grad_particle_dir * impulse_magnitude * rigid_body.inv_mass;
         world.angular_velocities_[c.body_idx].val -= rigid_body.inv_inertia * anchor_offset.Cross(grad_particle_dir * impulse_magnitude);
     }

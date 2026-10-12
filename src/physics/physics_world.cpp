@@ -473,7 +473,8 @@ void PhysicsWorld::Step(const float dt)
     
     constexpr int sub_steps = 4;
     const float sub_dt = dt / static_cast<float>(sub_steps);
-    const float inv_sdt_sq = 1 / (sub_dt * sub_dt);
+    const float inv_sub_dt = 1.f / sub_dt;
+    const float inv_sdt_sq = 1.f / (sub_dt * sub_dt);
     constexpr int velocity_iterations = 2;
     constexpr int position_iterations = 2;
     constexpr int xpbd_iterations = 2;
@@ -541,9 +542,9 @@ void PhysicsWorld::Step(const float dt)
                 }
             }
             XpbdSolver::SolveGlobalAreaConstraints(*this, inv_sdt_sq);
-            XpbdSolver::SolveRigidParticleAngularConstraints(*this, sub_dt);
-            XpbdSolver::SolveRigidParticleJointConstraints(*this, sub_dt);
-            XpbdSolver::SolveRigidParticleCollisionConstraints(*this, sub_dt);
+            XpbdSolver::SolveRigidParticleAngularConstraints(*this, inv_sub_dt);
+            XpbdSolver::SolveRigidParticleJointConstraints(*this, inv_sub_dt);
+            XpbdSolver::SolveRigidParticleCollisionConstraints(*this, sub_dt, inv_sub_dt);
             XpbdSolver::SolveParticleEdgeCollisionConstraints(*this);
         }
         profile_data_.solve_xpbd_constraints_ms += Duration(Clock::now() - start).count();
