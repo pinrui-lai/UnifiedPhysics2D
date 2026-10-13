@@ -377,7 +377,7 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
 }
 
 void PhysicsWorld::CreateCar(const Vec2& pos, float wheel_radius, float wheel_mass, float wheel_friction, float wheel_restitution,
-                             float absorber_height, float absorber_mass, float absorber_compliance,
+                             float suspension_height, float suspension_mass, float suspension_compliance,
                              float car_body_width, float car_body_height, float car_body_mass, float car_body_restitution, float car_body_friction)
 {
     // Left Wheel
@@ -388,46 +388,47 @@ void PhysicsWorld::CreateCar(const Vec2& pos, float wheel_radius, float wheel_ma
     const uint32_t right_wheel_idx = positions_.size();
     CreateCircle({pos.x + car_body_width, pos.y}, 0.f, {0.f, 0.f}, 0.f, wheel_mass, wheel_radius, wheel_restitution, wheel_friction);
     
-    // Left Absorber
+    // Left Suspension
     Vec2 left_wheel_center_pos = positions_[left_wheel_idx].val;
-    uint32_t left_absorber_upper_particle_idx = particle_positions_.size();
-    const uint32_t left_absorber_lower_particle_idx = particle_positions_.size() + 1;
-    const uint32_t left_absorber_handle_idx = soft_body_handles_.size();
-    CreateRope({left_wheel_center_pos.x, left_wheel_center_pos.y + absorber_height}, left_wheel_center_pos, 
-        1, absorber_mass, 0.f, absorber_compliance, false, false);
+    uint32_t left_suspension_upper_particle_idx = particle_positions_.size();
+    const uint32_t left_suspension_lower_particle_idx = particle_positions_.size() + 1;
+    const uint32_t left_suspension_handle_idx = soft_body_handles_.size();
+    CreateRope({left_wheel_center_pos.x, left_wheel_center_pos.y + suspension_height}, left_wheel_center_pos, 
+        1, suspension_mass, 0.f, suspension_compliance, false, false);
     
-    // Right Absorber
+    // Right Suspension
     Vec2 right_wheel_center_pos = positions_[right_wheel_idx].val;
-    uint32_t right_absorber_upper_particle_idx = particle_positions_.size();
-    const uint32_t right_absorber_lower_particle_idx = particle_positions_.size() + 1;
-    const uint32_t right_absorber_handle_idx = soft_body_handles_.size();
-    CreateRope({right_wheel_center_pos.x, right_wheel_center_pos.y + absorber_height}, right_wheel_center_pos, 
-        1, absorber_mass, 0.f, absorber_compliance, false, false);
+    uint32_t right_suspension_upper_particle_idx = particle_positions_.size();
+    const uint32_t right_suspension_lower_particle_idx = particle_positions_.size() + 1;
+    const uint32_t right_suspension_handle_idx = soft_body_handles_.size();
+    CreateRope({right_wheel_center_pos.x, right_wheel_center_pos.y + suspension_height}, right_wheel_center_pos, 
+        1, suspension_mass, 0.f, suspension_compliance, false, false);
     
     // Car Body
+    constexpr float suspension_depth = 0.15f;
     uint32_t car_body_idx = positions_.size();
-    CreateBox({pos.x + car_body_width * 0.5f, pos.y + absorber_height + car_body_height * 0.5f}, 0.f,
+    CreateBox({pos.x + car_body_width * 0.5f, pos.y + suspension_height + car_body_height * 0.5f - suspension_depth}, 0.f,
 {0.f, 0.f}, 0.f,  car_body_mass, car_body_width * 0.5f, car_body_height * 0.5f, car_body_restitution, car_body_friction);
     
-    // Absorber-Wheel Joint Constraints
-    AddRigidParticleJointConstraint(left_absorber_lower_particle_idx, left_wheel_idx, {0.f, 0.f});
-    AddRigidParticleJointConstraint(right_absorber_lower_particle_idx, right_wheel_idx, {0.f, 0.f});
+    // Suspension-Wheel Joint Constraints
+    AddRigidParticleJointConstraint(left_suspension_lower_particle_idx, left_wheel_idx, {0.f, 0.f});
+    AddRigidParticleJointConstraint(right_suspension_lower_particle_idx, right_wheel_idx, {0.f, 0.f});
     
-    // Absorber-CarBody Joint Constraints
-    Vec2 left_anchor{-car_body_width * 0.5f, -car_body_height * 0.5f};
-    Vec2 right_anchor{car_body_width * 0.5f, -car_body_height * 0.5f};
-    rigid_particle_joint_constraints_.emplace_back(left_anchor, left_absorber_upper_particle_idx, car_body_idx);
-    rigid_particle_joint_constraints_.emplace_back(right_anchor, right_absorber_upper_particle_idx, car_body_idx);
+    // Suspension-CarBody Joint Constraints
+    Vec2 left_anchor{-car_body_width * 0.5f, -car_body_height * 0.5f + suspension_depth};
+    Vec2 right_anchor{car_body_width * 0.5f, -car_body_height * 0.5f + suspension_depth};
+    rigid_particle_joint_constraints_.emplace_back(left_anchor, left_suspension_upper_particle_idx, car_body_idx);
+    rigid_particle_joint_constraints_.emplace_back(right_anchor, right_suspension_upper_particle_idx, car_body_idx);
     
-    // Absorber-CarBody Angle Constraints
-    rigid_particle_angular_constraints_.emplace_back(Vec2{0.f, -1.f}, left_anchor, left_absorber_lower_particle_idx, car_body_idx, 1e-6f);
-    rigid_particle_angular_constraints_.emplace_back(Vec2{0.f, -1.f}, right_anchor, right_absorber_lower_particle_idx, car_body_idx, 1e-6f);
+    // Suspension-CarBody Angle Constraints
+    rigid_particle_angular_constraints_.emplace_back(Vec2{0.f, -1.f}, left_anchor, left_suspension_lower_particle_idx, car_body_idx, 1e-6f);
+    rigid_particle_angular_constraints_.emplace_back(Vec2{0.f, -1.f}, right_anchor, right_suspension_lower_particle_idx, car_body_idx, 1e-6f);
     
     // Add collision ignore
-    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(left_wheel_idx, left_absorber_handle_idx));
-    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(right_wheel_idx, right_absorber_handle_idx));
-    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(car_body_idx, left_absorber_handle_idx));
-    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(car_body_idx, right_absorber_handle_idx));
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(left_wheel_idx, left_suspension_handle_idx));
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(right_wheel_idx, right_suspension_handle_idx));
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(car_body_idx, left_suspension_handle_idx));
+    rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(car_body_idx, right_suspension_handle_idx));
 }
 
 void PhysicsWorld::ApplyForce(const BodyHandle handle, const Vec2& force)

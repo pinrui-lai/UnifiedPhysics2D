@@ -119,7 +119,7 @@ public:
     SoftBodyHandle CreateSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
     SoftBodyHandle CreatePressureSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
     void CreateCar(const Vec2& pos, float wheel_radius, float wheel_mass, float wheel_friction, float wheel_restitution,
-                   float absorber_height, float absorber_mass, float absorber_compliance,
+                   float suspension_height, float suspension_mass, float suspension_compliance,
                    float car_body_width, float car_body_height, float car_body_mass, float car_body_restitution, float car_body_friction);
     
     void ApplyForce(BodyHandle handle, const Vec2& force);

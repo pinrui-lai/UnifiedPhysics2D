@@ -110,17 +110,17 @@ private:
     
     // Car
     float wheel_radius_{0.7f};
-    float wheel_mass_{15.f};
+    float wheel_mass_{20.f};
     float wheel_friction_{0.7f};
     float wheel_restitution_{0.05f};
-    float absorber_height_{1.5f};
-    float absorber_mass_{3.5f};
-    float absorber_compliance_{0.0005f};
-    float car_body_width_{4.f};
+    float suspension_height_{1.5f};
+    float suspension_mass_{3.5f};
+    float suspension_compliance_{0.0005f};
+    float car_body_width_{3.f};
     float car_body_height_{1.f};
-    float car_body_mass_{50.f};
+    float car_body_mass_{10.f};
     float car_body_restitution_{0.f};
-    float car_body_friction_{0.2f};
+    float car_body_friction_{0.5f};
     
     // ===== Others =====
     float arrow_key_force_{800.f};

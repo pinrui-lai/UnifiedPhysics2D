@@ -539,8 +539,8 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
         break;
         
     case SpawnType::Car:
-        world.CreateCar(spawn_pos, wheel_radius_, wheel_mass_, wheel_friction_, wheel_restitution_, absorber_height_,
-                        absorber_mass_, absorber_compliance_, car_body_width_,
+        world.CreateCar(spawn_pos, wheel_radius_, wheel_mass_, wheel_friction_, wheel_restitution_, suspension_height_,
+                        suspension_mass_, suspension_compliance_, car_body_width_,
                         car_body_height_, car_body_mass_, car_body_restitution_, car_body_friction_);
         break;
     }
@@ -623,9 +623,9 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::SliderFloat("Wheel Mass##car", &wheel_mass_, 0.1f, 50.f);
         ImGui::SliderFloat("Wheel Friction##car", &wheel_friction_, 0.f, 1.f);
         ImGui::SliderFloat("Wheel Restitution##car", &wheel_restitution_, 0.f, 1.f);
-        ImGui::SliderFloat("Absorber Height##car", &absorber_height_, 0.5f, 5.f);
-        ImGui::SliderFloat("Absorber Mass##car", &absorber_mass_, 0.1f, 50.f);
-        ImGui::SliderFloat("Absorber Compliance##car", &absorber_compliance_, 0.f, 0.001f, "%.7f");
+        ImGui::SliderFloat("Suspension Height##car", &suspension_height_, 0.5f, 5.f);
+        ImGui::SliderFloat("Suspension Mass##car", &suspension_mass_, 0.1f, 50.f);
+        ImGui::SliderFloat("Suspension Compliance##car", &suspension_compliance_, 0.f, 0.001f, "%.7f");
         ImGui::SliderFloat("Car Body Width##car", &car_body_width_, 1.f, 10.f);
         ImGui::SliderFloat("Car Body Height##car", &car_body_height_, 0.5f, 5.f);
         ImGui::SliderFloat("Car Body Mass##car", &car_body_mass_, 0.1f, 50.f);
