@@ -335,15 +335,16 @@ void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const
         const float C = rest_direction_world.Cross(r_normalized);
         
         // Gradients
-        // Gradient of position correction only need direction, because they're reverse vector, anchor and particle move along gradient cause same delta_C
-        const Vec2 grad_particle_dir = r_normalized.NormalWithoutNormalized();
-        const float grad_body_rot = grad_particle_dir.Cross(anchor_offset);
+        const Vec2 grad_particle = rest_direction_world.NormalWithoutNormalized();
+        const Vec2 grad_body = -grad_particle;
+        const float grad_body_rot = -rest_direction_world.Dot(world.particle_positions_[c.particle_idx] - world.positions_[c.body_idx].val);
         
         const RigidBodyComponent rigid_body = world.rigid_bodies_[c.body_idx];
-        const float w_particle = world.particle_inv_masses_[c.particle_idx];
-        const float w_rigid = rigid_body.inv_mass + rigid_body.inv_inertia * grad_body_rot * grad_body_rot;
-        const float w_sum = w_particle + w_rigid;
-
+        const float particle_inv_mass = world.particle_inv_masses_[c.particle_idx];
+        
+        const float w_sum = (particle_inv_mass + rigid_body.inv_mass) * grad_particle.LengthSquared()
+                            + rigid_body.inv_inertia * grad_body_rot * grad_body_rot;
+        
         const float alpha = c.compliance * inv_sub_dt * inv_sub_dt;
         const float denominator = w_sum + alpha;
 
@@ -353,12 +354,12 @@ void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const
         c.lambda += delta_lambda;
 
         // Move particle
-        world.particle_positions_[c.particle_idx] += grad_particle_dir * (world.particle_inv_masses_[c.particle_idx] * delta_lambda);
-
+        world.particle_positions_[c.particle_idx] += grad_particle * (particle_inv_mass * delta_lambda);
+        
         // Update rigid velocity (linear + angular)
         const float impulse_magnitude = delta_lambda * inv_sub_dt;
-        world.velocities_[c.body_idx].val -= grad_particle_dir * impulse_magnitude * rigid_body.inv_mass;
-        world.angular_velocities_[c.body_idx].val -= rigid_body.inv_inertia * anchor_offset.Cross(grad_particle_dir * impulse_magnitude);
+        world.velocities_[c.body_idx].val += grad_body * impulse_magnitude * rigid_body.inv_mass;
+        world.angular_velocities_[c.body_idx].val += grad_body_rot * impulse_magnitude * rigid_body.inv_inertia;
     }
 }
 
