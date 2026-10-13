@@ -530,9 +530,11 @@ void CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world,
             const auto particle_idx = soft_body_a.start_surface_particle_idx + local_particle_idx;
             const Vec2& particle_pos = world.particle_positions_[particle_idx];
 
-            const float t = (particle_pos - a_pos).Dot(ab) / ab_len_sq;
-            if (t < 0.f || t > 1.f) return;
+            float t = (particle_pos - a_pos).Dot(ab) / ab_len_sq;
+            if (t < 0.f - physics_config::kTwoParticlesThickness || t > 1.f + physics_config::kTwoParticlesThickness) return;
 
+            t = std::clamp(t, 0.f, 1.f);
+            
             const Vec2 proj = a_pos + ab * t;
             const Vec2 diff = particle_pos - proj;
 
