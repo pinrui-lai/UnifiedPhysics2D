@@ -11,7 +11,7 @@ void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::span<Aabb> wor
     
     world.bvh_tree_nodes_.clear();
     
-    // Rigid Body world AABBs.
+    // Rigid Body world AABBs. 
     auto index_range = std::views::iota(uint32_t{0}, rigid_count);
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(), [&](const uint32_t i) {
         std::visit([&](auto& s)
@@ -119,8 +119,8 @@ void CollisionBroadPhase::BuildSubBvh(std::span<const Aabb> world_space_aabbs, s
     BuildBvhRecursive(items, world_space_aabbs, sub_bvh_nodes, 0, items.size());
 }
 
-void CollisionBroadPhase::QueryBvh(PhysicsWorld& world, const std::span<Aabb> world_aabbs, uint32_t query_obj_idx, std::pmr::vector<std::pair<uint32_t,
-    uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts)
+void CollisionBroadPhase::QueryBvh(const PhysicsWorld& world, std::span<const Aabb> world_aabbs, uint32_t query_obj_idx, std::vector<std::pair<uint32_t, uint32_t>>& rigid_rigid_candidates, std::
+                                   vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts)
 {
     if (world.bvh_tree_root_index_ == std::numeric_limits<uint32_t>::max()) return;
     
@@ -145,20 +145,7 @@ void CollisionBroadPhase::QueryBvh(PhysicsWorld& world, const std::span<Aabb> wo
             {
                 if (!is_query_rigid || leaf_id <= query_obj_idx) continue; // Prevent "self-collision" and "duplicate pair (a, b) and (b, a)".
             
-                const uint64_t pair_key = MakePairKey(query_obj_idx, leaf_id);
-
-                // Find if the manifold already exist. 
-                if (auto it = world.manifold_map_.find(pair_key); it != world.manifold_map_.end()) 
-                {
-                    const size_t manifold_idx = it->second;
-                    world.manifolds_[manifold_idx].is_overlapping = true;
-                } 
-                else 
-                {
-                    const size_t new_idx = world.manifolds_.size();
-                    world.manifolds_.emplace_back(query_obj_idx, leaf_id);
-                    world.manifold_map_[pair_key] = new_idx;
-                }
+                rigid_rigid_candidates.emplace_back(query_obj_idx, leaf_id);
             }
             else
             {

@@ -48,8 +48,10 @@ private:
         return node_index;
     }
     
-    static void QueryBvh(PhysicsWorld& world, std::span<Aabb> world_aabbs, uint32_t query_obj_idx, 
-        std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::pmr::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
+    static void QueryBvh(const PhysicsWorld& world, std::span<const Aabb> world_aabbs, uint32_t query_obj_idx,
+                         std::vector<std::pair<uint32_t, uint32_t>>& rigid_rigid_candidates,
+                         std::vector<std::pair<uint32_t, uint32_t>>& rigid_soft_contacts, std::vector<std::pair<uint32_t, uint32_t>>& soft_soft_contacts);
+    
     static Aabb ComputeFastAabbFromLocalAabb(const Vec2& pos, Rot rot, const Aabb& local_aabb);
     
     static uint32_t ExpandBits(uint32_t bits){

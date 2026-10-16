@@ -60,6 +60,7 @@ struct PhysicsProfileData {
 class PhysicsWorld
 {
 private:
+    // --- Rigid Body ---
     std::vector<RigidBodyComponent> rigid_bodies_;
     std::vector<Vec2> forces_;
     std::vector<PositionComponent> positions_;
@@ -73,7 +74,7 @@ private:
     std::vector<Vec2> vertices_;
     std::vector<Aabb> local_aabbs_;
     
-    // ===== XPBD Soft Body =====
+    // --- XPBD Soft Body ---
     std::vector<SoftBodyHandle> soft_body_handles_;
     std::vector<Vec2> particle_positions_;
     std::vector<Vec2> particle_prev_positions_;
@@ -91,9 +92,16 @@ private:
     std::vector<XpbdRigidParticleAngularConstraint> rigid_particle_angular_constraints_;
     std::vector<Aabb> particle_aabbs_;
     std::vector<Aabb> surface_edge_aabbs_;
-    std::vector<std::pmr::vector<BvhNode>> soft_body_surface_particle_bvhs_;
     std::unordered_set<uint64_t> rigid_soft_collision_ignore_;
     std::unordered_set<uint64_t> soft_soft_collision_ignore_;
+    
+    // --- Collision ---
+    std::vector<BvhNode> bvh_tree_nodes_;
+    std::vector<QueryOutput> query_outputs_;
+    uint32_t bvh_tree_root_index_{std::numeric_limits<uint32_t>::max()};
+    std::vector<Manifold> manifolds_;
+    std::unordered_map<uint64_t, uint32_t> manifold_map_;
+    std::vector<std::pmr::vector<BvhNode>> soft_body_surface_particle_bvhs_;
     
     std::vector<std::byte> buffer_;
     std::pmr::monotonic_buffer_resource frame_arena_;
@@ -103,11 +111,14 @@ public:
     explicit PhysicsWorld(const float gravity = physics_config::kDefaultGravity, const size_t arena_size_bytes = 4 * 1024 * 1024) 
     : buffer_(arena_size_bytes), frame_arena_(buffer_.data(), sizeof(buffer_)), gravity_(gravity){}
     
+    // --- Rigid Body ---
     BodyHandle CreateBody(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float inertia, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreateCircle(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float radius, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreateBox(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, float half_width, float half_height, float restitution = 0.1f, float friction = 0.1f);
     BodyHandle CreatePolygon(const Vec2& pos, float rotation, const Vec2& velocity, float angular_velocity, float mass, const std::vector<Vec2>& vertices, float restitution = 0.1f, float friction = 0.1f);
     uint32_t AddParticle(const Vec2& pos, float inv_mass, float friction);
+    
+    // --- Soft Body ---
     uint32_t AddDistanceConstraint(uint32_t p1, uint32_t p2, float compliance);
     uint32_t AddTriangleAreaConstraint(uint32_t p1, uint32_t p2, uint32_t p3, float compliance);
     uint32_t AddGlobalAreaConstraint(uint32_t start_particle_idx, uint16_t particle_count, float compliance);
@@ -151,11 +162,8 @@ public:
     void ClearWorld();
     
     float gravity_;
-    std::vector<BvhNode> bvh_tree_nodes_;
-    uint32_t bvh_tree_root_index_{std::numeric_limits<uint32_t>::max()};
-    std::vector<Manifold> manifolds_;
-    std::unordered_map<uint64_t, uint32_t> manifold_map_;
     
+    // Debug
     bool show_debug_contact_points_ = true;
     bool show_debug_clipping_ = false;
     bool is_multi_thread_{true};

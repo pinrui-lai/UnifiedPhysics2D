@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <vector>
 
 struct Vec2
 {
@@ -236,4 +237,18 @@ struct Item
 {
     uint32_t id;
     uint32_t morton_code;
+};
+
+struct QueryOutput
+{
+    std::vector<std::pair<uint32_t, uint32_t>> rr;
+    std::vector<std::pair<uint32_t, uint32_t>> rs;
+    std::vector<std::pair<uint32_t, uint32_t>> ss;
+
+    void Clear()
+    {
+        rr.clear();
+        rs.clear();
+        ss.clear();
+    }
 };
