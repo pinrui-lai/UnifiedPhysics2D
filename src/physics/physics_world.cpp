@@ -175,7 +175,7 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
 }
 
 SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, const float height, const uint16_t res_x, const uint16_t res_y,
-    const float mass, const float friction, const float compliance)
+                                           const float mass, const float friction, const float compliance, const float area_compliance)
 {
     if (res_x < 2 || res_y < 2) return {};
 
@@ -258,8 +258,8 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
             AddDistanceConstraint(p01, p11, compliance);
 
             // Triangle Area Constraints
-            AddTriangleAreaConstraint(p00, p11, p10, 0.f); 
-            AddTriangleAreaConstraint(p00, p01, p11, 0.f);
+            AddTriangleAreaConstraint(p00, p11, p10, area_compliance); 
+            AddTriangleAreaConstraint(p00, p01, p11, area_compliance);
         }
     }
 
@@ -607,7 +607,7 @@ std::span<Vec2> PhysicsWorld::GetSoftBodyParticlePositions(const uint32_t i)
     return std::span(particle_positions_).subspan(soft_body_handle.start_particle_idx, soft_body_handle.particle_count);
 }
 
-std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const BoxShape& box_shape, uint32_t i)
+std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const BoxShape& box_shape, const uint32_t i) const
 {
     // Vertices are arranged in clockwise.
     std::array<Vec2, 4> vertices = {

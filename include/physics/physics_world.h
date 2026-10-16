@@ -115,7 +115,7 @@ public:
     void AddSoftSoftCollisionIgnore(uint32_t body_idx1, uint32_t body_idx2);
     void AddRigidSoftCollisionIgnore(uint32_t rigid_idx, uint32_t soft_idx);
     SoftBodyHandle CreateRope(const Vec2& start, const Vec2& end, uint16_t segments, float mass, float friction, float compliance = 0.f, bool fix_start = true, bool fix_end = false);
-    SoftBodyHandle CreateSoftBox(const Vec2& pos, float width, float height, uint16_t res_x, uint16_t res_y, float mass, float friction, float compliance);
+    SoftBodyHandle CreateSoftBox(const Vec2& pos, float width, float height, uint16_t res_x, uint16_t res_y, float mass, float friction, float compliance, float area_compliance = 0.f);
     SoftBodyHandle CreateSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
     SoftBodyHandle CreatePressureSoftCircle(const Vec2& pos, float radius, uint16_t segments, float mass, float friction, float compliance);
     void CreateCar(const Vec2& pos, float wheel_radius, float wheel_mass, float wheel_friction, float wheel_restitution,
@@ -139,8 +139,8 @@ public:
     const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
     auto GetParticleRigidConstraintsSize() const { return rigid_particle_collision_constraints_.size(); }
     auto GetParticleEdgeConstraintsSize() const { return particle_edge_collision_constraints_.size(); }
-    std::array<Vec2, 4> GetBodyVertices(const BoxShape& box_shape, uint32_t i);
-    std::vector<Vec2> GetBodyVertices(const PolygonShape& polygon_shape, uint32_t i);
+    std::array<Vec2, 4> GetBodyVertices(const BoxShape& box_shape, uint32_t i) const;
+    static std::vector<Vec2> GetBodyVertices(const PolygonShape& polygon_shape, uint32_t i);
     const std::vector<std::pmr::vector<BvhNode>>& GetSubBvhs(){return soft_body_surface_particle_bvhs_;}
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }

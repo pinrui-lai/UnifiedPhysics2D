@@ -1,31 +1,31 @@
 #pragma once
 #include <span>
 
+#include "scene_builder.h"
 #include "physics/types.h"
 
 class PhysicsWorld;
 
 enum class SpawnType {
-    RigidCircle = 0,
-    RigidBox,
-    SoftRope,
-    SoftBox,
-    SoftCircleArea,
-    SoftCirclePressure,
-    Car
+    kRigidCircle = 0,
+    kRigidBox,
+    kSoftRope,
+    kSoftBox,
+    kSoftCircleArea,
+    kSoftCirclePressure,
+    kCar
 };
 
 class Application
 {
 public:
-    void CreateInitialBodies(SDL_Window* window, PhysicsWorld& world);
+    void CreateInitialBodies(SDL_Window* window, PhysicsWorld& world, scenes::PresetScene preset = scenes::PresetScene::kDefaultDemo);
     void Input(SDL_Window* window, bool &is_running, PhysicsWorld& world);
     static void Update(PhysicsWorld& world, float dt);
     void Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world);
     void RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, int window_width, double render_time_ms);
     void SpawnBodyAt(PhysicsWorld& world, SpawnType type, Vec2 spawn_pos) const;
     void RenderSpawnTypeConfigUi(SpawnType type);
-    void ResetWorld(SDL_Window* window, PhysicsWorld& world);
     
     static ImU32 GetDepthColor(int depth, float alpha = 1.f);
     static void DrawBvhNode(ImDrawList* draw_list, std::span<const BvhNode> nodes, int node_idx, int current_depth, int max_render_depth, int& hovered_node_idx, float window_height);
@@ -34,22 +34,12 @@ public:
     static bool AabbContains(const Aabb& aabb, const ImVec2 p) { return p.x >= aabb.min_x && p.x <= aabb.max_x && p.y >= aabb.min_y && p.y <= aabb.max_y; }
     
 private:
+    scenes::SceneObjects scene_objects_;
+    
     // ===== Handles =====
-    BodyHandle floating_circle_{0xFFFFFFFF};
-    BodyHandle floating_circle2_{0xFFFFFFFF};
-    BodyHandle floating_box_{0xFFFFFFFF};
-    BodyHandle floating_wide_box_1_{0xFFFFFFFF};
-    BodyHandle floating_wide_box_2_{0xFFFFFFFF};
-    BodyHandle ceil_{0xFFFFFFFF};
-    BodyHandle floor_{0xFFFFFFFF};
-    BodyHandle left_wall_{0xFFFFFFFF};
-    BodyHandle right_wall_{0xFFFFFFFF};
-    BodyHandle debug_circle_{0xFFFFFFFF};
-    BodyHandle debug_box_{0xFFFFFFFF};
-    
-    std::array<BodyHandle*, 4> boundaries_{&ceil_, &floor_, &left_wall_, &right_wall_ };
-    std::array<BodyHandle*, 5> floatings_{ &floating_circle_, &floating_circle2_, &floating_box_, &floating_wide_box_1_, &floating_wide_box_2_};
-    
+    std::array<BodyHandle*, 4> boundaries_{&scene_objects_.ceiling, &scene_objects_.floor, &scene_objects_.left_wall, &scene_objects_.right_wall};
+    std::array<BodyHandle*, 4> floatings_{ &scene_objects_.floating_circle, &scene_objects_.floating_circle2, &scene_objects_.floating_wide_box1, &scene_objects_.floating_wide_box2};
+
     // ===== Scene Bodies Setting =====
     float floating_bodies_angular_vel_{0.5f};
     float floating_bodies_restitution_{0.2f};
@@ -59,8 +49,8 @@ private:
     float boundary_friction_{0.5f};
     
     // ===== Mouse Spawn Settings =====
-    SpawnType left_click_spawn_type_{SpawnType::RigidBox};
-    SpawnType right_click_spawn_type_{SpawnType::SoftCirclePressure};
+    SpawnType left_click_spawn_type_{SpawnType::kRigidBox};
+    SpawnType right_click_spawn_type_{SpawnType::kSoftCirclePressure};
     
     // Rigid Circle
     float circle_spawn_mass_{5.f};
