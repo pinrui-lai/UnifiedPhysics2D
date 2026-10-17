@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <execution>
 
 #include "physics/physics_world.h"
 #include "physics/collision/collision_broad_phase.h"
@@ -75,11 +76,19 @@ uint32_t PhysicsWorld::AddParticle(const Vec2& pos, const float inv_mass, const 
     return idx;
 }
 
-uint32_t PhysicsWorld::AddDistanceConstraint(const uint32_t p1, const uint32_t p2, const float compliance)
+uint32_t PhysicsWorld::AddInternalDistanceConstraint(const uint32_t p1, const uint32_t p2, const float compliance)
 {
-    const uint32_t idx = distance_constraints_.size();
+    const uint32_t idx = internal_distance_constraints_.size();
     const float rest_len = (particle_positions_[p1] - particle_positions_[p2]).Length();
-    distance_constraints_.emplace_back(p1, p2, rest_len, compliance, 0.f);
+    internal_distance_constraints_.emplace_back(p1, p2, rest_len, compliance, 0.f);
+    return idx;
+}
+
+uint32_t PhysicsWorld::AddCrossBodyDistanceConstraint(uint32_t p1, uint32_t p2, float compliance)
+{
+    const uint32_t idx = cross_body_distance_constraints_.size();
+    const float rest_len = (particle_positions_[p1] - particle_positions_[p2]).Length();
+    cross_body_distance_constraints_.emplace_back(p1, p2, rest_len, compliance, 0.f);
     return idx;
 }
 
@@ -144,6 +153,8 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
     handle.surface_edge_count = segments;
     handle.start_surface_particle_idx = handle.start_particle_idx;
     handle.surface_particle_count = segments + 1;
+    handle.start_distance_constraint_idx = internal_distance_constraints_.size();
+    handle.distance_constraint_count = segments;
 
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
     const float inv_particle_mass = particle_mass > 0.f ? 1.f / particle_mass : 0.f;
@@ -166,7 +177,7 @@ SoftBodyHandle PhysicsWorld::CreateRope(const Vec2& start, const Vec2& end, cons
     {
         const uint32_t p1 = handle.start_particle_idx + i;
         const uint32_t p2 = handle.start_particle_idx + i + 1;
-        AddDistanceConstraint(p1, p2, compliance);
+        AddInternalDistanceConstraint(p1, p2, compliance);
         surface_edges_.emplace_back(p1, p2);
     }
 
@@ -184,7 +195,9 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
     handle.particle_count = res_x * res_y;
     handle.start_surface_edge_idx = surface_edges_.size();
     handle.surface_edge_count = (res_x - 1) * 2 + (res_y - 1) * 2;
-
+    handle.start_distance_constraint_idx = internal_distance_constraints_.size();
+    handle.distance_constraint_count = (res_x - 1) * res_y + (res_y - 1) * res_x;
+    
     // outer particles are arranged continuously at the front of the particles.
     handle.start_surface_particle_idx = handle.start_particle_idx;
     handle.surface_particle_count = res_x * 2 + res_y * 2 - 4;
@@ -248,14 +261,14 @@ SoftBodyHandle PhysicsWorld::CreateSoftBox(const Vec2& pos, const float width, c
 
             // Structural Springs
             if (y == 0){
-                AddDistanceConstraint(p00, p10, compliance);
+                AddInternalDistanceConstraint(p00, p10, compliance);
             }
             if (x == 0){
-                AddDistanceConstraint(p00, p01, compliance);
+                AddInternalDistanceConstraint(p00, p01, compliance);
             } 
                 
-            AddDistanceConstraint(p10, p11, compliance);
-            AddDistanceConstraint(p01, p11, compliance);
+            AddInternalDistanceConstraint(p10, p11, compliance);
+            AddInternalDistanceConstraint(p01, p11, compliance);
 
             // Triangle Area Constraints
             AddTriangleAreaConstraint(p00, p11, p10, area_compliance); 
@@ -297,6 +310,8 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
     handle.surface_edge_count = segments;
     handle.start_surface_particle_idx = handle.start_particle_idx + 1;
     handle.surface_particle_count = segments;
+    handle.start_distance_constraint_idx = internal_distance_constraints_.size();
+    handle.distance_constraint_count = segments * 2;
 
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
     const float inv_mass = particle_mass > 0.f ? 1.f / particle_mass : 0.f;
@@ -319,10 +334,10 @@ SoftBodyHandle PhysicsWorld::CreateSoftCircle(const Vec2& pos, const float radiu
         const uint32_t curr = handle.start_particle_idx + 1 + i;
         const uint32_t next = handle.start_particle_idx + 1 + ((i + 1) % segments);
 
-        AddDistanceConstraint(handle.start_particle_idx, curr, compliance);
+        AddInternalDistanceConstraint(handle.start_particle_idx, curr, compliance);
         
         // Outer Ring Distance  Constraint
-        AddDistanceConstraint(curr, next, compliance);
+        AddInternalDistanceConstraint(curr, next, compliance);
         surface_edges_.emplace_back(curr, next);
         
         // Internal Circular Sector Area Constraint (Clockwise)
@@ -345,6 +360,8 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
     handle.surface_edge_count = segments;
     handle.start_surface_particle_idx = handle.start_particle_idx;
     handle.surface_particle_count = segments;
+    handle.start_distance_constraint_idx = internal_distance_constraints_.size();
+    handle.distance_constraint_count = segments;
     
     const float particle_mass = mass / static_cast<float>(handle.particle_count);
     const float inv_mass = particle_mass > 0.f ? 1.f / particle_mass : 0.f;
@@ -366,7 +383,7 @@ SoftBodyHandle PhysicsWorld::CreatePressureSoftCircle(const Vec2& pos, const flo
         surface_edges_.emplace_back(curr, next);
 
         // Outer Ring Distance Constraint
-        AddDistanceConstraint(curr, next, compliance);
+        AddInternalDistanceConstraint(curr, next, compliance);
     }
     
     // Internal Global Area Constraint
@@ -499,7 +516,11 @@ void PhysicsWorld::Step(const float dt)
         CollisionDetectionSystem::CheckCollision(*this);
 
         start = Clock::now();
-        for (auto& distance_constraint : distance_constraints_)
+        for (auto& distance_constraint : internal_distance_constraints_)
+        {
+            distance_constraint.lambda = 0.f;
+        }
+        for (auto& distance_constraint : cross_body_distance_constraints_)
         {
             distance_constraint.lambda = 0.f;
         }
@@ -520,10 +541,15 @@ void PhysicsWorld::Step(const float dt)
         {
             if (iter % 2 == 0) 
             {
-                for (auto& c : distance_constraints_) 
+                std::for_each(std::execution::par_unseq, soft_body_handles_.begin(), soft_body_handles_.end(), [&](auto& soft_body_handle)
                 {
-                    XpbdSolver::SolveDistanceConstraint(*this, inv_sdt_sq, c);
-                }
+                    for (int i = soft_body_handle.start_distance_constraint_idx; 
+                        i < soft_body_handle.start_distance_constraint_idx + soft_body_handle.distance_constraint_count; ++i)
+                    {
+                        XpbdSolver::SolveDistanceConstraint(*this, inv_sdt_sq, internal_distance_constraints_[i]);
+                    }
+                });
+                
                 for (auto& c : triangle_area_constraints_) 
                 {
                     XpbdSolver::SolveTriangleAreaConstraint(*this, inv_sdt_sq, c);
@@ -531,17 +557,27 @@ void PhysicsWorld::Step(const float dt)
             } 
             else 
             {
-                for (int i = distance_constraints_.size()-1; i >= 0; --i) 
+                std::for_each(std::execution::par_unseq, soft_body_handles_.begin(), soft_body_handles_.end(), [&](auto& soft_body_handle)
                 {
-                    auto& c = distance_constraints_[i];
-                    XpbdSolver::SolveDistanceConstraint(*this, inv_sdt_sq, c);
-                }
+                    for (int i = soft_body_handle.distance_constraint_count - 1; i >= 0; --i)
+                    {
+                        const int idx = soft_body_handle.start_distance_constraint_idx + i;
+                        XpbdSolver::SolveDistanceConstraint(*this, inv_sdt_sq, internal_distance_constraints_[idx]);
+                    }
+                });
+                
                 for (int i = triangle_area_constraints_.size()-1; i >= 0; --i) 
                 {
                     auto& c = triangle_area_constraints_[i];
                     XpbdSolver::SolveTriangleAreaConstraint(*this, inv_sdt_sq, c);
                 }
             }
+            
+            for (auto& c : cross_body_distance_constraints_) 
+            {
+                XpbdSolver::SolveDistanceConstraint(*this, inv_sdt_sq, c);
+            }
+            
             XpbdSolver::SolveGlobalAreaConstraints(*this, inv_sdt_sq);
             XpbdSolver::SolveRigidParticleAngularConstraints(*this, inv_sub_dt);
             XpbdSolver::SolveRigidParticleJointConstraints(*this, inv_sub_dt);
@@ -647,7 +683,8 @@ void PhysicsWorld::ClearWorld()
     particle_frictions_.clear();
     particle_forces_.clear();
     surface_edges_.clear();
-    distance_constraints_.clear();
+    internal_distance_constraints_.clear();
+    cross_body_distance_constraints_.clear();
     triangle_area_constraints_.clear();
     global_area_constraints_.clear();
     bvh_tree_root_index_ = std::numeric_limits<uint32_t>::max();

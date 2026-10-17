@@ -83,7 +83,8 @@ private:
     std::vector<float> particle_frictions_;
     std::vector<Vec2> particle_forces_;
     std::vector<std::pair<uint32_t, uint32_t>> surface_edges_;
-    std::vector<XpbdDistanceConstraint> distance_constraints_;
+    std::vector<XpbdDistanceConstraint> internal_distance_constraints_;
+    std::vector<XpbdDistanceConstraint> cross_body_distance_constraints_;
     std::vector<XpbdTriangleAreaConstraint> triangle_area_constraints_;
     std::vector<XpbdGlobalAreaConstraint> global_area_constraints_;
     std::vector<XpbdRigidParticleCollisionConstraint> rigid_particle_collision_constraints_;
@@ -119,7 +120,8 @@ public:
     uint32_t AddParticle(const Vec2& pos, float inv_mass, float friction);
     
     // --- Soft Body ---
-    uint32_t AddDistanceConstraint(uint32_t p1, uint32_t p2, float compliance);
+    uint32_t AddInternalDistanceConstraint(uint32_t p1, uint32_t p2, float compliance);
+    uint32_t AddCrossBodyDistanceConstraint(uint32_t p1, uint32_t p2, float compliance);
     uint32_t AddTriangleAreaConstraint(uint32_t p1, uint32_t p2, uint32_t p3, float compliance);
     uint32_t AddGlobalAreaConstraint(uint32_t start_particle_idx, uint16_t particle_count, float compliance);
     uint32_t AddRigidParticleJointConstraint(uint32_t particle_idx, uint32_t rigid_idx, Vec2 anchor_local);
@@ -146,7 +148,7 @@ public:
     std::span<BvhNode> GetBvhNodes() { return bvh_tree_nodes_; }
     const std::vector<Manifold>& GetManifolds() { return manifolds_; }
     const std::vector<Vec2>& GetParticlePositions() { return particle_positions_; }
-    const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return distance_constraints_; }
+    const std::vector<XpbdDistanceConstraint>& GetDistanceConstraints() { return internal_distance_constraints_; }
     const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
     auto GetParticleRigidConstraintsSize() const { return rigid_particle_collision_constraints_.size(); }
     auto GetParticleEdgeConstraintsSize() const { return particle_edge_collision_constraints_.size(); }

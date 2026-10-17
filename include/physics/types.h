@@ -156,6 +156,8 @@ struct SoftBodyHandle
     uint32_t start_particle_idx{0};
     uint32_t start_surface_edge_idx{0};
     uint32_t start_surface_particle_idx{0};
+    uint32_t start_distance_constraint_idx{0};
+    uint16_t distance_constraint_count{0};
     uint16_t surface_particle_count{0};
     uint16_t surface_edge_count{0};
     uint16_t particle_count{0};
