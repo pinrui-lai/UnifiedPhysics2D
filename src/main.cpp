@@ -20,7 +20,6 @@ int main(int argc, char* argv[]) {
         SDL_Log("Window/Renderer Creation Error: %s", SDL_GetError());
         return -1;
     }
-    SDL_SetRenderVSync(renderer, 1);
     
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -39,6 +38,7 @@ int main(int argc, char* argv[]) {
     // Create floor, walls and floating obstacles.
     application.CreateInitialBodies(window, world);
     
+    const Uint64 target_frame_time = SDL_GetPerformanceFrequency() / 60;
     Uint64 last_time = SDL_GetPerformanceCounter();
     constexpr float max_delta_time = 1.f / 60.f;
     // Game Loop.
@@ -54,6 +54,25 @@ int main(int argc, char* argv[]) {
         application.Input(window, is_running, world);
         Application::Update(world, delta_time);
         application.Render(renderer, window, world);
+        
+        // Fix frame rate.
+        const Uint64 frame_end = SDL_GetPerformanceCounter();
+        const Uint64 elapsed = frame_end - current_time;
+        
+        if (elapsed < target_frame_time)
+        {
+            // Convert to ms.
+            const Uint32 sleep_ms = (target_frame_time - elapsed) * 1000 / SDL_GetPerformanceFrequency();
+            if (sleep_ms > 1)
+            {
+                SDL_Delay(sleep_ms - 1); // Leave some time for busy-waiting to make precise adjustments.
+            }
+            // remaining time busy-wait to ensure a stable frame rate.
+            while ((SDL_GetPerformanceCounter() - current_time) < target_frame_time) 
+            {
+                // spin lock
+            }
+        }
     }
     
     // Quit.
