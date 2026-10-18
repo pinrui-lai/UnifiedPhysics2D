@@ -526,30 +526,49 @@ void CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world,
         uint32_t stack_ptr = 0;
         stack[stack_ptr++] = 0;
         
+        bool is_found = false;
+        
         auto check_and_add_contact = [&](const uint32_t local_particle_idx) {
             const auto particle_idx = soft_body_a.start_surface_particle_idx + local_particle_idx;
             const Vec2& particle_pos = world.particle_positions_[particle_idx];
 
             float t = (particle_pos - a_pos).Dot(ab) / ab_len_sq;
-            if (t < 0.f - physics_config::kTwoParticlesThickness || t > 1.f + physics_config::kTwoParticlesThickness) return;
-
+            if (t < -0.05f || t > 1.05f) return;
+            
             t = std::clamp(t, 0.f, 1.f);
             
             const Vec2 proj = a_pos + ab * t;
             const Vec2 diff = particle_pos - proj;
 
             const float dist_sq = diff.LengthSquared();
-            if (dist_sq > total_thickness_sq || dist_sq < 1e-6f) return;
-
-            const Vec2 normal = is_b_closed ? ab.Normal() : (diff / std::sqrt(dist_sq));
+            // if (dist_sq > total_thickness_sq || dist_sq < 1e-12f) return;
+            if (dist_sq > total_thickness_sq) return;
+            
+            Vec2 normal = ab.Normal();
+            if (!is_b_closed)
+            {
+                if (dist_sq > 1e-8f)
+                {
+                    normal = diff / std::sqrt(dist_sq);
+                }
+                else
+                {
+                    const Vec2 prev_p_pos = world.particle_prev_positions_[particle_idx];
+                    const Vec2 prev_a_pos = world.particle_prev_positions_[fst];
+                    const Vec2 prev_b_pos = world.particle_prev_positions_[snd];
+                    const float previous_side  = (prev_p_pos - prev_a_pos).Dot((prev_b_pos - prev_a_pos).NormalWithoutNormalized());
+                    normal = previous_side >= 0 ? normal : -normal; 
+                }
+            }
 
             out_contacts.emplace_back(normal, particle_idx, fst, snd, t);
+            is_found = true;
         };
         
         if (soft_body_a.surface_particle_count > physics_config::kSubBvhThreshold )
         {
             // Traverse BVH
-            while (stack_ptr > 0)
+            while (stack_ptr > 0 && !is_found)
             {
                 const uint32_t curr = stack[--stack_ptr];
                 const auto& node = body_a_surface_particle_bvh[curr];
@@ -575,6 +594,7 @@ void CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world,
                 if (!Aabb::Overlap(body_a_particle_aabbs[i], body_b_edge_aabbs[j])) continue;
             
                 check_and_add_contact(i);
+                if (is_found) break;
             }
         }
     }
