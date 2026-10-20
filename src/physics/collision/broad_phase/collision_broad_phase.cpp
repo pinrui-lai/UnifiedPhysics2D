@@ -2,9 +2,9 @@
 #include <ranges>
 
 #include "physics/physics_world.h"
-#include "physics/collision/collision_broad_phase.h"
+#include "physics/collision/broad_phase/collision_broad_phase.h"
 
-void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs)
+void CollisionBroadPhase::BuildGlobalBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs)
 {
     const uint32_t rigid_count = world.positions_.size();
     const uint32_t soft_count = world.soft_body_handles_.size();
@@ -87,10 +87,10 @@ void CollisionBroadPhase::BuildWorldBvh(PhysicsWorld& world, std::span<Aabb> wor
     world.bvh_tree_root_index_ = BuildBvhRecursive(items, world_space_aabbs, world.bvh_tree_nodes_, 0, items.size());
 }
 
-void CollisionBroadPhase::BuildSubBvh(std::span<const Aabb> world_space_aabbs, std::pmr::vector<BvhNode>& sub_bvh_nodes)
+void CollisionBroadPhase::BuildLocalBvh(std::span<const Aabb> world_space_aabbs, std::pmr::vector<BvhNode>& local_bvh_nodes)
 {
-    sub_bvh_nodes.clear();
-    sub_bvh_nodes.reserve(world_space_aabbs.size() * 2);
+    local_bvh_nodes.clear();
+    local_bvh_nodes.reserve(world_space_aabbs.size() * 2);
     
     // Get Scene Bounding Box (boundary of all bodies in the world).
     Aabb scene_aabb = world_space_aabbs[0];
@@ -116,7 +116,7 @@ void CollisionBroadPhase::BuildSubBvh(std::span<const Aabb> world_space_aabbs, s
     // Sort by morton code.
     std::ranges::sort(items, {}, &Item::morton_code);
     
-    BuildBvhRecursive(items, world_space_aabbs, sub_bvh_nodes, 0, items.size());
+    BuildBvhRecursive(items, world_space_aabbs, local_bvh_nodes, 0, items.size());
 }
 
 void CollisionBroadPhase::QueryBvh(const PhysicsWorld& world, std::span<const Aabb> world_aabbs, uint32_t query_obj_idx, std::vector<std::pair<uint32_t, uint32_t>>& rigid_rigid_candidates, std::
@@ -184,7 +184,7 @@ void CollisionBroadPhase::QueryBvh(const PhysicsWorld& world, std::span<const Aa
     }
 }
 
-Aabb CollisionBroadPhase::ComputeFastAabbFromLocalAabb(const Vec2& pos, Rot rot, const Aabb& local_aabb)
+Aabb CollisionBroadPhase::ComputeFastAabbFromLocalAabb(const Vec2& pos, const Rot rot, const Aabb& local_aabb)
 {
     const Vec2 local_aabb_min{local_aabb.min_x, local_aabb.min_y};
     const Vec2 local_aabb_max{local_aabb.max_x, local_aabb.max_y};

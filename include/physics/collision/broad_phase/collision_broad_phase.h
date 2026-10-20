@@ -5,7 +5,7 @@
 
 #include "physics/types.h"
 
-class CollisionNarrowPhase;
+class SoftSoftCollision;
 class CollisionDetectionSystem;
 struct Rot;
 class PhysicsWorld;
@@ -13,8 +13,8 @@ class PhysicsWorld;
 class CollisionBroadPhase
 {
 private:
-    static void BuildWorldBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs);
-    static void BuildSubBvh(std::span<const Aabb> world_space_aabbs, std::pmr::vector<BvhNode>& sub_bvh_nodes);
+    static void BuildGlobalBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs);
+    static void BuildLocalBvh(std::span<const Aabb> world_space_aabbs, std::pmr::vector<BvhNode>& local_bvh_nodes);
     
     template <typename T, typename Alloc>
     static uint32_t BuildBvhRecursive(std::span<Item> items, std::span<const Aabb> world_space_aabbs, std::vector<T, Alloc>& bvh_nodes, int start, int end)
@@ -84,6 +84,6 @@ private:
     static void CleanupStaleManifolds(PhysicsWorld& world);
     
     friend CollisionDetectionSystem;
-    friend CollisionNarrowPhase;
+    friend SoftSoftCollision;
     friend PhysicsWorld;
 };

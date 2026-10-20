@@ -3,8 +3,10 @@
 #include <ranges>
 
 #include "physics/systems/collision_detection_system.h"
-#include "physics/collision/collision_broad_phase.h"
-#include "physics/collision/collision_narrow_phase.h"
+#include "physics/collision/broad_phase/collision_broad_phase.h"
+#include "physics/collision/narrow_phase/rigid_rigid_collision.h"
+#include "physics/collision/narrow_phase/rigid_soft_collision.h"
+#include "physics/collision/narrow_phase/soft_soft_collision.h"
 #include "physics/physics_world.h"
 
 void CollisionDetectionSystem::GenerateContacts(PhysicsWorld& world, std::span<const Aabb> world_aabbs, std::pmr::vector<std::pair<uint32_t, uint32_t>>& rigid_rigid_candidates,
@@ -107,7 +109,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     if (total_count == 0) return;
     
     std::pmr::vector<Aabb> world_aabbs(total_count, &world.frame_arena_);
-    CollisionBroadPhase::BuildWorldBvh(world, world_aabbs);
+    CollisionBroadPhase::BuildGlobalBvh(world, world_aabbs);
     
     std::pmr::vector<std::pair<uint32_t, uint32_t>> rigid_rigid_candidates(&world.frame_arena_);
     std::pmr::vector<std::pair<uint32_t, uint32_t>> rigid_particle_contacts(&world.frame_arena_);
@@ -130,16 +132,16 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     start = Clock::now();
     for (const auto& [fst, snd] : rigid_particle_contacts)
     {
-        CollisionNarrowPhase::CheckRigidParticleCollision(world, fst, snd);
+        RigidSoftCollision::CheckRigidParticleCollision(world, fst, snd);
     }
     world.profile_data_.rigid_soft_ms += Duration(Clock::now() - start).count();
     
     // Soft vs Soft.
     start = Clock::now();
-    CollisionNarrowPhase::UpdateParticleEdgeAabbs(world, soft_soft_contacts);
+    SoftSoftCollision::UpdateParticleEdgeAabbs(world, soft_soft_contacts);
     world.profile_data_.ss_update_local_aabb_bvh += Duration(Clock::now() - start).count();
     start = Clock::now();
-    CollisionNarrowPhase::CheckSoftSoftCollision(world, soft_soft_contacts);
+    SoftSoftCollision::CheckSoftSoftCollision(world, soft_soft_contacts);
     world.profile_data_.ss_detection += Duration(Clock::now() - start).count();
     world.profile_data_.soft_soft_ms = world.profile_data_.ss_update_local_aabb_bvh + world.profile_data_.ss_detection;
     
@@ -153,7 +155,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
         const uint8_t old_contact_count = manifold.contact_count;
         
         // Write new contacts of the current frame in manifold.
-        CollisionNarrowPhase::Gjk(world, manifold);
+        RigidRigidCollision::Gjk(world, manifold);
         
         // Match Feature ID and inherit old impulse.
         for (uint8_t i = 0; i < manifold.contact_count; ++i)

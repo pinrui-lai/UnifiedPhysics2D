@@ -240,10 +240,10 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         RenderBvhDebug(world.GetBvhNodes(), 0, bvh_draw_max_depth_, float_h);
     }
     
-    if (draw_sub_bvh_) {
-        for (const auto& sub_bvh : world.GetSubBvhs())
+    if (draw_local_bvh_) {
+        for (const auto& local_bvh : world.GetLocalBvhs())
         {
-            RenderBvhDebug(sub_bvh, 0, bvh_draw_max_depth_, float_h);    
+            RenderBvhDebug(local_bvh, 0, bvh_draw_max_depth_, float_h);    
         }
     }
     
@@ -474,7 +474,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Spacing();
     ImGui::Text("BVH(Deeper nodes' AABBs shrink more when rendered) :");
     ImGui::Checkbox("Draw Global BVH", &draw_bvh_);
-    ImGui::Checkbox("Draw Soft Body Local BVH (Only updated\nwhen it collides with another soft body)", &draw_sub_bvh_);
+    ImGui::Checkbox("Draw Soft Body Local BVH (Only updated\nwhen it collides with another soft body)", &draw_local_bvh_);
     ImGui::SliderInt("BVH Draw Depth", &bvh_draw_max_depth_, 0, 20);
     ImGui::Spacing();
     ImGui::Text("Arrow Key to apply force to all bodies :");

@@ -2,7 +2,7 @@
 #include <execution>
 
 #include "physics/physics_world.h"
-#include "physics/collision/collision_broad_phase.h"
+#include "physics/collision/broad_phase/collision_broad_phase.h"
 #include "physics/systems/movement_system.h"
 #include "physics/systems/collision_solver_system.h"
 #include "physics/systems/collision_detection_system.h"

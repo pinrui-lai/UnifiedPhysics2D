@@ -125,5 +125,5 @@ private:
     bool draw_bvh_{false};
     bool draw_particle_{false};
     bool draw_surface_particle_{false};
-    bool draw_sub_bvh_{false};
+    bool draw_local_bvh_{false};
 };

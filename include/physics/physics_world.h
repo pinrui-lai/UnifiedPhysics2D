@@ -8,7 +8,9 @@
 #include "components.h"
 #include "physics_config.h"
 
-class CollisionNarrowPhase;
+class SoftSoftCollision;
+class RigidSoftCollision;
+class RigidRigidCollision;
 class CollisionBroadPhase;
 class XpbdSolver;
 class CollisionSolverSystem;
@@ -158,7 +160,7 @@ public:
     auto GetParticleEdgeConstraintsSize() const { return particle_edge_collision_constraints_.size(); }
     std::array<Vec2, 4> GetBodyVertices(const BoxShape& box_shape, uint32_t i) const;
     static std::vector<Vec2> GetBodyVertices(const PolygonShape& polygon_shape, uint32_t i);
-    const std::vector<std::pmr::vector<BvhNode>>& GetSubBvhs(){return soft_body_surface_particle_bvhs_;}
+    const std::vector<std::pmr::vector<BvhNode>>& GetLocalBvhs(){return soft_body_surface_particle_bvhs_;}
     
     void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }
     void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id].val = angular_vel; }
@@ -181,7 +183,9 @@ public:
     friend MovementSystem;
     friend CollisionDetectionSystem;
     friend CollisionBroadPhase;
-    friend CollisionNarrowPhase;
+    friend RigidRigidCollision;
+    friend RigidSoftCollision;
+    friend SoftSoftCollision;
     friend CollisionSolverSystem;
     friend XpbdSolver;
 };
