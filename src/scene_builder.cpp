@@ -96,7 +96,7 @@ namespace scenes
         rope_start_pos.x -= 9.f;
         rope_start_pos.y += 5.f;
         const Vec2 rope_end_pos{rope_start_pos.x + 12.f, rope_start_pos.y};
-        world.CreateRope(rope_start_pos, rope_end_pos, physics_config::kSubBvhThreshold + 1,  20, 0.5f, 0.00001f, true, true);
+        world.CreateRope(rope_start_pos, rope_end_pos, 64,  20, 0.5f, 0.00001f, true, true);
         
         // Hanging Cloth
         constexpr float cloth_width = 5.f;

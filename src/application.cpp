@@ -1,10 +1,11 @@
+#include <algorithm>
 #include <array>
 #include <numbers>
 #include <SDL3/SDL.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
 
-#include "Application.h"
+#include "application.h"
 #include "physics/physics_config.h"
 #include "physics/physics_world.h"
 
@@ -171,10 +172,13 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     }
     
     // ==== Soft Body ====
-    for (const auto& particle_position : particle_positions)
+    if (draw_particle_)
     {
-        ImVec2 pos{particle_position.x * ppm, float_h - particle_position.y * ppm};
-        draw_list->AddCircleFilled(pos, 4.f, IM_COL32(255, 0, 0, 255));
+        for (const auto& particle_position : particle_positions)
+        {
+            ImVec2 pos{particle_position.x * ppm, float_h - particle_position.y * ppm};
+            draw_list->AddCircleFilled(pos, 4.f, IM_COL32(255, 0, 0, 255));
+        }    
     }
     
     for (const auto& constraint : world.GetDistanceConstraints())
@@ -227,7 +231,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
                 draw_list->AddLine(pt_a, pt_b, IM_COL32(255, 255, 0, 255), 5.f);
             
                 // Draw collision point a.
-                draw_list->AddCircleFilled(pt_a, 5.f, IM_COL32(230, 230, 230, 255));
+                draw_list->AddCircleFilled(pt_a, 5.f, IM_COL32(190, 190, 190, 255));
             }
         }    
     }
@@ -246,7 +250,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     draw_list->AddText(ImGui::GetFont(), 30.f, ImVec2(static_cast<float>(w) * 0.4f, float_h * 0.05f), IM_COL32(255, 255, 255, 255),
         "Arrow Key to apply force to all bodies\nLeft/Right Mouse to spawn body" );
     
-    RenderPhysicsControlPanel(window, world, w, Duration(Clock::now() - start).count());
+    RenderPhysicsControlPanel(window, world, w);
     
     ImGui::Render();
     SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
@@ -254,20 +258,35 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
     SDL_RenderPresent(renderer);
+    render_time_ms_ = Duration(Clock::now() - start).count();
 }
 
-void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, const int window_width, const double render_time_ms)
+void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, const int window_width)
 {
     ImGui::SetNextWindowPos(ImVec2(static_cast<float>(window_width) - 415.f, 10), ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(ImVec2(415, 1060), ImGuiCond_Appearing);
     ImGui::SetNextWindowCollapsed(false, ImGuiCond_Appearing);
     
     ImGui::Begin("Physics Engine Control");
+    constexpr float indent_len{8.f};
 
-    ImGui::Text("FPS: %.1f, Render: %.5f ms\nNum Bodies: %zu, Num Manifolds: %zu\nNum Particle-Rigid Contacts: %zu\nNum Particle-Edge Contacts: %zu",
-        ImGui::GetIO().Framerate, render_time_ms, world.GetPositions().size() + world.GetSoftBodyHandles().size(), world.GetManifolds().size(), world.GetParticleRigidConstraintsSize(), world.GetParticleEdgeConstraintsSize());
+    ImGui::Text("FPS: %.1f, Render: %.5f ms",
+        ImGui::GetIO().Framerate, render_time_ms_);
     
-    ImGui::Spacing();
+    // ===== Counts =====
+    ImGui::Separator();
+    ImGui::Text("Counts:");
+    
+    ImGui::Indent(indent_len);
+    ImGui::Text("Rigid Bodies: %zu, Soft Bodies: %zu, Particles: %zu",
+        world.GetPositions().size(), world.GetSoftBodyHandles().size(), world.GetParticlePositions().size());
+    
+    ImGui::Text("Manifolds: %zu\nParticle-Rigid Contacts: %zu\nParticle-Edge Contacts: %zu",
+        world.GetManifolds().size(), world.GetParticleRigidConstraintsSize(), world.GetParticleEdgeConstraintsSize());
+    ImGui::Unindent(indent_len);
+    
+    // ===== Profiler =====
+    ImGui::Separator();
     ImGui::Text("Integrate Rigid Vel: %.5f ms\nPredict Particle Pos: %.5f ms",
         world.profile_data_.integrate_rigid_vel, world.profile_data_.predict_particle_pos);
     
@@ -276,8 +295,10 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
         world.profile_data_.broad_phase_ms, world.profile_data_.build_bvh_ms, world.profile_data_.query_bvh_ms, world.profile_data_.erase_manifold_ms);
     
     ImGui::Spacing();
-    ImGui::Text("Narrow-Phase: %.5f ms\n  Rigid - Rigid: %.5f ms\n  Rigid - Soft: %.5f ms\n  Soft - Soft: %.5f ms",
-        world.profile_data_.narrow_phase_ms, world.profile_data_.rigid_rigid_ms, world.profile_data_.rigid_soft_ms, world.profile_data_.soft_soft_ms);
+    ImGui::Text("Narrow-Phase: %.5f ms\n  Rigid - Rigid: %.5f ms\n  Rigid - Soft: %.5f ms\n  Soft - Soft: %.5f ms"
+                "\n    Update Local AABB & BVH: %.5f ms\n    Detection: %.5f ms",
+                world.profile_data_.narrow_phase_ms, world.profile_data_.rigid_rigid_ms, world.profile_data_.rigid_soft_ms,
+                world.profile_data_.soft_soft_ms, world.profile_data_.ss_update_local_aabb_bvh, world.profile_data_.ss_detection);
     
     ImGui::Spacing();
     ImGui::Text("Solve XPBD Constraint: %.5f ms\nSolve Sequential Impulse Constraint: %.5f ms",
@@ -287,6 +308,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Text("Integrate Rigid Pos: %.5f ms\nUpdate Particle Vel: %.5f ms",
         world.profile_data_.integrate_rigid_pos, world.profile_data_.update_particle_vel);
     
+    // ===== Preset Scenes =====
     ImGui::Separator();
     ImGui::Text("Preset Scenes(click to reset scene):");
     
@@ -328,7 +350,6 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
         world.ClearWorld();
         CreateInitialBodies(window, world, scenes::PresetScene::kRopeStressTest);
     }
-    constexpr float indent_len{8.f};
     
     // ===== Scene Boundaries =====
     ImGui::Spacing();
@@ -444,15 +465,16 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Spacing();
     ImGui::SeparatorText("Debug Options:");
     ImGui::Indent(indent_len);
-    ImGui::Checkbox("Toggle Multi-Thread(Rigid-Rigid&Soft-Soft Narrow-Phase)", &world.is_multi_thread_);
+    ImGui::Checkbox("Use Single-Thread(Rigid-Rigid&Soft-Soft Narrow-Phase)", &world.use_single_thread_);
+    ImGui::Checkbox("Use Local BVH in Soft-Soft Narrow-Phase", &world.use_local_bvh_);
     ImGui::Checkbox("Draw Contact Info", &world.show_debug_contact_points_);
-    ImGui::Checkbox("Draw IncidentEdge & ReferenceEdge(single-thread only)", &world.show_debug_clipping_);
+    ImGui::Checkbox("Draw Incident/Reference Edge(single-thread only)", &world.show_debug_clipping_);
+    ImGui::Checkbox("Draw Particle of Soft Body", &draw_particle_);
     ImGui::Checkbox("Draw Surface Particle of Soft Body", &draw_surface_particle_);
     ImGui::Spacing();
     ImGui::Text("BVH(Deeper nodes' AABBs shrink more when rendered) :");
     ImGui::Checkbox("Draw Global BVH", &draw_bvh_);
-    ImGui::Checkbox("Draw Soft Body Surface Particle BVH (Only updated\nwhen it collides with another soft body & "
-                    "surface\nparticle count exceeds 100)", &draw_sub_bvh_);
+    ImGui::Checkbox("Draw Soft Body Local BVH (Only updated\nwhen it collides with another soft body)", &draw_sub_bvh_);
     ImGui::SliderInt("BVH Draw Depth", &bvh_draw_max_depth_, 0, 20);
     ImGui::Spacing();
     ImGui::Text("Arrow Key to apply force to all bodies :");
@@ -550,8 +572,12 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
         ImGui::Checkbox("Fix End", &fix_end_);
         ImGui::SameLine();
         ImGui::Checkbox("Horizontal", &is_horizontal_);
-        ImGui::SliderFloat("Length##rope", &rope_spawn_length_, 1.f, 30.f);
-        ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 1, 128);
+        if (ImGui::SliderFloat("Length##rope", &rope_spawn_length_, 1.f, 30.f))
+        {
+            rope_max_spawn_num_segments_ = static_cast<int>(rope_spawn_length_ * physics_config::kParticleDensityLenght);
+            rope_spawn_num_segments_ = std::clamp(rope_spawn_num_segments_, 3, rope_max_spawn_num_segments_);
+        }
+        ImGui::SliderInt("Segments##rope", &rope_spawn_num_segments_, 1, rope_max_spawn_num_segments_);
         ImGui::SliderFloat("Mass##rope", &rope_spawn_mass_, 0.1f, 100.f);
         ImGui::SliderFloat("Friction##rope", &rope_spawn_friction_, 0.f, 1.f);
         ImGui::SliderFloat("Compliance##rope", &rope_spawn_compliance_, 0.f, 0.005f, "%.7f");
@@ -560,10 +586,18 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
     case SpawnType::kSoftBox:
         ImGui::SameLine();
         ImGui::Text("Soft Box");
-        ImGui::SliderFloat("Width##sbox", &soft_box_spawn_width_, 0.5f, 10.f);
-        ImGui::SliderFloat("Height##sbox", &soft_box_spawn_height_, 0.5f, 10.f);
-        ImGui::SliderInt("Grid Nx##sbox", &soft_box_spawn_nx_, 2, 20);
-        ImGui::SliderInt("Grid Ny##sbox", &soft_box_spawn_ny_, 2, 20);
+        if (ImGui::SliderFloat("Width##sbox", &soft_box_spawn_width_, 0.5f, 10.f))
+        {
+            soft_box_max_spawn_nx_ = static_cast<int>(soft_box_spawn_width_ * physics_config::kParticleDensityLenght);
+            soft_box_spawn_nx_ = std::clamp(soft_box_spawn_nx_, 2, soft_box_max_spawn_nx_);
+        }
+        if (ImGui::SliderFloat("Height##sbox", &soft_box_spawn_height_, 0.5f, 10.f))
+        {
+            soft_box_max_spawn_ny_ = static_cast<int>(soft_box_spawn_height_ * physics_config::kParticleDensityLenght);
+            soft_box_spawn_ny_ = std::clamp(soft_box_spawn_ny_, 2, soft_box_max_spawn_ny_);
+        }
+        ImGui::SliderInt("Grid Nx##sbox", &soft_box_spawn_nx_, 2, soft_box_max_spawn_nx_);
+        ImGui::SliderInt("Grid Ny##sbox", &soft_box_spawn_ny_, 2, soft_box_max_spawn_ny_);
         ImGui::SliderFloat("Mass##sbox", &soft_box_spawn_mass_, 0.1f, 100.f);
         ImGui::SliderFloat("Friction##sbox", &soft_box_spawn_friction_, 0.f, 1.f);
         ImGui::SliderFloat("Compliance##sbox", &soft_box_spawn_compliance_, 0.f, 0.005f, "%.7f");
@@ -572,8 +606,12 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
     case SpawnType::kSoftCircleArea:
         ImGui::SameLine();
         ImGui::Text("Triangle Area Soft Circle");
-        ImGui::SliderFloat("Radius##scircle", &soft_circle_spawn_radius_, 0.5f, 10.f);
-        ImGui::SliderInt("Segments##scircle", &soft_circle_spawn_num_segments_, 3, 128);
+        if (ImGui::SliderFloat("Radius##scircle", &soft_circle_spawn_radius_, 0.5f, 10.f))
+        {
+            soft_circle_max_spawn_num_segments_ = static_cast<int>(soft_circle_spawn_radius_ * physics_config::kParticleDensityRadius);
+            soft_circle_spawn_num_segments_ = std::clamp(soft_circle_spawn_num_segments_, 3, soft_circle_max_spawn_num_segments_);
+        }
+        ImGui::SliderInt("Segments##scircle", &soft_circle_spawn_num_segments_, 3, soft_circle_max_spawn_num_segments_);
         ImGui::SliderFloat("Mass##scircle", &soft_circle_spawn_mass_, 0.1f, 100.f);
         ImGui::SliderFloat("Friction##scircle", &soft_circle_spawn_friction_, 0.f, 1.f);
         ImGui::SliderFloat("Compliance##scircle", &soft_circle_spawn_compliance_, 0.f, 0.005f, "%.7f");
@@ -582,8 +620,12 @@ void Application::RenderSpawnTypeConfigUi(const SpawnType type)
     case SpawnType::kSoftCirclePressure:
         ImGui::SameLine();
         ImGui::Text("Pressure Soft Circle");
-        ImGui::SliderFloat("Radius##pcircle", &pressure_circle_spawn_radius_, 0.5f, 10.f);
-        ImGui::SliderInt("Segments##pcircle", &pressure_circle_spawn_num_segments_, 3, 128);
+        if (ImGui::SliderFloat("Radius##pcircle", &pressure_circle_spawn_radius_, 0.5f, 10.f))
+        {
+            pressure_circle_max_spawn_num_segments_ = static_cast<int>(pressure_circle_spawn_radius_ * physics_config::kParticleDensityRadius);
+            pressure_circle_spawn_num_segments_ = std::clamp(pressure_circle_spawn_num_segments_, 3, pressure_circle_max_spawn_num_segments_);
+        }
+        ImGui::SliderInt("Segments##pcircle", &pressure_circle_spawn_num_segments_, 3, pressure_circle_max_spawn_num_segments_);
         ImGui::SliderFloat("Mass##pcircle", &pressure_circle_spawn_mass_, 0.f, 100.f);
         ImGui::SliderFloat("Friction##pcircle", &pressure_circle_spawn_friction_, 0.f, 1.f);
         ImGui::SliderFloat("Compliance##pcircle", &pressure_circle_spawn_compliance_, 0.f, 0.001f, "%.7f");

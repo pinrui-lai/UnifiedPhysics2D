@@ -336,7 +336,7 @@ void CollisionNarrowPhase::GetCollisionPoints(PhysicsWorld& world, Vec2 collisio
             const std::array<uint32_t, 2> ref_edge_ids = is_ref_a ? edge_ids_a : edge_ids_b;
             const std::array<uint32_t, 2> inc_edge_ids = is_ref_a ? edge_ids_b : edge_ids_a;
             
-            if (world.show_debug_clipping_ && !world.is_multi_thread_){
+            if (world.show_debug_clipping_ && world.use_single_thread_){
                 world.debug_incident_edges_.push_back(inc_edge_pos);
                 world.debug_reference_edges_.push_back(ref_edge_pos);
             }
@@ -496,7 +496,7 @@ void CollisionNarrowPhase::UpdateParticleEdgeAabbs(PhysicsWorld& world, const st
         }
         
         // Update soft body surface particle BVH
-        if (body.surface_particle_count > physics_config::kSubBvhThreshold){
+        if (world.use_local_bvh_){
             CollisionBroadPhase::BuildSubBvh(std::span(world.particle_aabbs_).subspan(
                 body.start_surface_particle_idx, body.surface_particle_count), world.soft_body_surface_particle_bvhs_[body_idx]);    
         }
@@ -565,7 +565,7 @@ void CollisionNarrowPhase::CheckParticleEdgeCollision(const PhysicsWorld& world,
             is_found = true;
         };
         
-        if (soft_body_a.surface_particle_count > physics_config::kSubBvhThreshold )
+        if (world.use_local_bvh_)
         {
             // Traverse BVH
             while (stack_ptr > 0 && !is_found)
@@ -653,10 +653,10 @@ void CollisionNarrowPhase::CheckSoftSoftCollision(PhysicsWorld& world, const std
         }
     };
 
-    if (world.is_multi_thread_) {
-        std::for_each(std::execution::par, index_range.begin(), index_range.end(), fill_contacts);
-    } else {
+    if (world.use_single_thread_) {
         std::for_each(std::execution::seq, index_range.begin(), index_range.end(), fill_contacts);
+    } else {
+        std::for_each(std::execution::par, index_range.begin(), index_range.end(), fill_contacts);
     }
 
     const uint32_t actual_new_contacts = total_new_contacts.load(std::memory_order_relaxed);

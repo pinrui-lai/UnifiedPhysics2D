@@ -137,8 +137,11 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     // Soft vs Soft.
     start = Clock::now();
     CollisionNarrowPhase::UpdateParticleEdgeAabbs(world, soft_soft_contacts);
+    world.profile_data_.ss_update_local_aabb_bvh += Duration(Clock::now() - start).count();
+    start = Clock::now();
     CollisionNarrowPhase::CheckSoftSoftCollision(world, soft_soft_contacts);
-    world.profile_data_.soft_soft_ms += Duration(Clock::now() - start).count();
+    world.profile_data_.ss_detection += Duration(Clock::now() - start).count();
+    world.profile_data_.soft_soft_ms = world.profile_data_.ss_update_local_aabb_bvh + world.profile_data_.ss_detection;
     
     // Rigid vs Rigid (GJK + EPA + Clipping).
     auto process = [&world](auto& manifold)
@@ -172,11 +175,11 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     };
     
     start = Clock::now();
-    if (world.is_multi_thread_){
-        std::for_each(std::execution::par_unseq, world.manifolds_.begin(), world.manifolds_.end(), process);    
+    if (world.use_single_thread_){
+        std::for_each(std::execution::seq, world.manifolds_.begin(), world.manifolds_.end(), process);
     }
     else{
-        std::for_each(std::execution::seq, world.manifolds_.begin(), world.manifolds_.end(), process);
+        std::for_each(std::execution::par_unseq, world.manifolds_.begin(), world.manifolds_.end(), process);    
     }
     world.profile_data_.rigid_rigid_ms += Duration(Clock::now() - start).count();
     world.profile_data_.narrow_phase_ms = world.profile_data_.soft_soft_ms + world.profile_data_.rigid_soft_ms + world.profile_data_.rigid_rigid_ms;

@@ -28,6 +28,8 @@ struct PhysicsProfileData {
     double rigid_rigid_ms = 0.0;
     double rigid_soft_ms = 0.0;
     double soft_soft_ms = 0.0;
+    double ss_update_local_aabb_bvh = 0.0;
+    double ss_detection = 0.0;
     
     double solve_xpbd_constraints_ms = 0.0;
     double solve_si_constraints_ms = 0.0;
@@ -48,6 +50,8 @@ struct PhysicsProfileData {
         rigid_rigid_ms = 0.0;
         rigid_soft_ms = 0.0;
         soft_soft_ms = 0.0;
+        ss_update_local_aabb_bvh = 0.0;
+        ss_detection = 0.0;
         
         solve_xpbd_constraints_ms = 0.0;
         solve_si_constraints_ms = 0.0;
@@ -168,7 +172,8 @@ public:
     // Debug
     bool show_debug_contact_points_ = true;
     bool show_debug_clipping_ = false;
-    bool is_multi_thread_{true};
+    bool use_single_thread_{false};
+    bool use_local_bvh_{true};
     std::vector<std::array<Vec2, 2>> debug_incident_edges_;
     std::vector<std::array<Vec2, 2>> debug_reference_edges_;
     PhysicsProfileData profile_data_;

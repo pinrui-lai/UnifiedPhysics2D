@@ -2,6 +2,7 @@
 #include <span>
 
 #include "scene_builder.h"
+#include "physics/physics_config.h"
 #include "physics/types.h"
 
 class PhysicsWorld;
@@ -23,7 +24,7 @@ public:
     void Input(SDL_Window* window, bool &is_running, PhysicsWorld& world);
     static void Update(PhysicsWorld& world, float dt);
     void Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world);
-    void RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, int window_width, double render_time_ms);
+    void RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, int window_width);
     void SpawnBodyAt(PhysicsWorld& world, SpawnType type, Vec2 spawn_pos) const;
     void RenderSpawnTypeConfigUi(SpawnType type);
     
@@ -34,6 +35,7 @@ public:
     static bool AabbContains(const Aabb& aabb, const ImVec2 p) { return p.x >= aabb.min_x && p.x <= aabb.max_x && p.y >= aabb.min_y && p.y <= aabb.max_y; }
     
 private:
+    double render_time_ms_{0};
     scenes::SceneObjects scene_objects_;
     
     // ===== Handles =====
@@ -70,6 +72,7 @@ private:
     bool fix_end_{false};
     bool is_horizontal_{false};
     float rope_spawn_length_{5.f};
+    int rope_max_spawn_num_segments_{static_cast<int>(rope_spawn_length_ * physics_config::kParticleDensityLenght)};
     int rope_spawn_num_segments_{20};
     float rope_spawn_mass_{5.f};
     float rope_spawn_friction_{0.5f};
@@ -78,6 +81,8 @@ private:
     // Soft Box (Triangle Area)
     float soft_box_spawn_width_{2.f};
     float soft_box_spawn_height_{2.f};
+    int soft_box_max_spawn_nx_{static_cast<int>(soft_box_spawn_width_ * physics_config::kParticleDensityLenght)};
+    int soft_box_max_spawn_ny_{static_cast<int>(soft_box_spawn_height_ * physics_config::kParticleDensityLenght)};
     int soft_box_spawn_nx_{5};
     int soft_box_spawn_ny_{5};
     float soft_box_spawn_mass_{5.f};
@@ -86,6 +91,7 @@ private:
 
     // Soft Circle (Triangle Area)
     float soft_circle_spawn_radius_{1.4f};
+    int soft_circle_max_spawn_num_segments_{static_cast<int>(soft_circle_spawn_radius_ * physics_config::kParticleDensityRadius)};
     int soft_circle_spawn_num_segments_{20};
     float soft_circle_spawn_mass_{10.f};
     float soft_circle_spawn_friction_{0.5f};
@@ -93,6 +99,7 @@ private:
 
     // Soft Circle (Pressure)
     float pressure_circle_spawn_radius_{1.4f};
+    int pressure_circle_max_spawn_num_segments_{static_cast<int>(pressure_circle_spawn_radius_ * physics_config::kParticleDensityRadius)};
     int pressure_circle_spawn_num_segments_{20};
     float pressure_circle_spawn_mass_{10.f};
     float pressure_circle_spawn_friction_{0.5f};
@@ -114,8 +121,9 @@ private:
     
     // ===== Others =====
     float arrow_key_force_{800.f};
-    bool draw_bvh_{false};
     int bvh_draw_max_depth_{5};
+    bool draw_bvh_{false};
+    bool draw_particle_{false};
     bool draw_surface_particle_{false};
     bool draw_sub_bvh_{false};
 };
