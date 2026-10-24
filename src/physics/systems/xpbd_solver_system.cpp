@@ -7,20 +7,20 @@
 
 void XpbdSolver::PredictParticles(PhysicsWorld& world, const float sdt)
 {
-    const uint32_t count = world.particle_positions_.size();
+    const uint32_t count = world.particle_inv_masses_.size();
 
     auto index_range = std::views::iota(uint32_t{0}, count);
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(),[&](auto i)
     {
         if (world.particle_inv_masses_[i] == 0.f) return;
     
-        world.particle_prev_positions_[i] = world.particle_positions_[i];
+        world.SetParticlePrevPosition(i, world.GetParticlePosition(i));
     
         const Vec2 accel = world.particle_forces_[i] * world.particle_inv_masses_[i];
         world.particle_velocities_[i] += accel * sdt;
         
-        world.particle_positions_[i] += world.particle_velocities_[i] * sdt;
-            
+        world.PlusEqualParticlePosition(i, world.particle_velocities_[i] * sdt);    
+        
         world.particle_forces_[i] = Vec2{0.f, 0.f};
     });
 }
@@ -36,27 +36,27 @@ void XpbdSolver::SolveDistanceConstraint(PhysicsWorld& world, const float inv_sd
     
     if (w_sum == 0.f) return;
 
-    const Vec2 pos1 = world.particle_positions_[i1];
-    const Vec2 pos2 = world.particle_positions_[i2];
+    const Vec2 pos1 = world.GetParticlePosition(i1);
+    const Vec2 pos2 = world.GetParticlePosition(i2);
 
     const Vec2 delta = pos1 - pos2;
     const float len = delta.Length();
     if (len < 1e-6f) return;
 
     const Vec2 n = delta / len;
-    const float C = len - c.rest_length; // Constraint function C(x)
+    const float violation = len - c.rest_length; // Constraint function C(x)
     
     // alpha_tilde = compliance / (sdt^2)
     const float alpha_tilde = c.compliance * inv_sdt_sq;
     
     // dLambda
-    const float delta_lambda = (-C - alpha_tilde * c.lambda) / (w_sum + alpha_tilde);
+    const float delta_lambda = (-violation - alpha_tilde * c.lambda) / (w_sum + alpha_tilde);
     c.lambda += delta_lambda;
     
     // Position correction : dx = w * n * dLambda
     const Vec2 dx = n * delta_lambda;
-    if (w1 > 0.f) world.particle_positions_[i1] += dx * w1;
-    if (w2 > 0.f) world.particle_positions_[i2] -= dx * w2;
+    if (w1 > 0.f) world.PlusEqualParticlePosition(i1, dx * w1);
+    if (w2 > 0.f) world.PlusEqualParticlePosition(i2, -(dx * w2));
 }
 
 void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, const float inv_sdt_sq, XpbdTriangleAreaConstraint& c)
@@ -69,13 +69,13 @@ void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, const float in
     
     if (w1 + w2 + w3 == 0.f) return;
     
-    const Vec2 p1 = world.particle_positions_[i1];
-    const Vec2 p2 = world.particle_positions_[i2];
-    const Vec2 p3 = world.particle_positions_[i3];
+    const Vec2 p1 = world.GetParticlePosition(i1);
+    const Vec2 p2 = world.GetParticlePosition(i2);
+    const Vec2 p3 = world.GetParticlePosition(i3);
     
     // Triangle Area
     const float current_area = 0.5f * (p1.x * (p3.y - p2.y) + p2.x * (p1.y - p3.y) + p3.x * (p2.y - p1.y));
-    float C = current_area - c.rest_area;
+    const float violation = current_area - c.rest_area;
     
     // Gradient of C
     const Vec2 grad1{ 0.5f * (p3.y - p2.y), 0.5f * (p2.x - p3.x) };
@@ -88,12 +88,12 @@ void XpbdSolver::SolveTriangleAreaConstraint(PhysicsWorld& world, const float in
     
     // XPBD Position Correction
     const float alpha_tilde = c.compliance * inv_sdt_sq;
-    const float delta_lambda = (-C - alpha_tilde * c.lambda) / (grad_sq_sum + alpha_tilde);
+    const float delta_lambda = (-violation - alpha_tilde * c.lambda) / (grad_sq_sum + alpha_tilde);
     c.lambda += delta_lambda;
     
-    if (w1 > 0.f) world.particle_positions_[i1] += grad1 * (w1 * delta_lambda);
-    if (w2 > 0.f) world.particle_positions_[i2] += grad2 * (w2 * delta_lambda);
-    if (w3 > 0.f) world.particle_positions_[i3] += grad3 * (w3 * delta_lambda);
+    if (w1 > 0.f) world.PlusEqualParticlePosition(i1, grad1 * (w1 * delta_lambda));
+    if (w2 > 0.f) world.PlusEqualParticlePosition(i2, grad2 * (w2 * delta_lambda));
+    if (w3 > 0.f) world.PlusEqualParticlePosition(i3, grad3 * (w3 * delta_lambda));
 }
 
 void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, const float inv_sdt_sq)
@@ -108,14 +108,14 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, const float inv
         {
             const uint32_t curr = c.start_particle_idx + i;
             const uint32_t next = c.start_particle_idx + ((i + 1) % c.particle_count);
-            const Vec2& p1 = world.particle_positions_[curr];
-            const Vec2& p2 = world.particle_positions_[next];
+            const Vec2& p1 = world.GetParticlePosition(curr);
+            const Vec2& p2 = world.GetParticlePosition(next);
         
             current_area += (p2.x * p1.y - p1.x * p2.y);
         }
         current_area *= 0.5f;
 
-        float C = current_area - c.rest_area; // C(x) = A - A0
+        const float violation = current_area - c.rest_area; // C(x) = A - A0
 
         // Gradients
         std::pmr::vector<Vec2> grads(c.particle_count, &world.frame_arena_);
@@ -126,8 +126,8 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, const float inv
             const uint32_t prev_idx = c.start_particle_idx + ((i + c.particle_count - 1) % c.particle_count);
             const uint32_t next_idx = c.start_particle_idx + ((i + 1) % c.particle_count);
 
-            const Vec2& p_prev = world.particle_positions_[prev_idx];
-            const Vec2& p_next = world.particle_positions_[next_idx];
+            const Vec2& p_prev = world.GetParticlePosition(prev_idx);
+            const Vec2& p_next = world.GetParticlePosition(next_idx);
 
             // Grad_i = 0.5 * (y_{i-1} - y_{i+1}, x_{i+1} - x_{i-1})
             grads[i] = Vec2{ 0.5f * (p_prev.y - p_next.y), 0.5f * (p_next.x - p_prev.x) };
@@ -140,7 +140,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, const float inv
         if (grad_sq_sum < 1e-9f) return;
 
         const float alpha_tilde = c.compliance * inv_sdt_sq;
-        const float delta_lambda = (-C - alpha_tilde * c.lambda) / (grad_sq_sum + alpha_tilde);
+        const float delta_lambda = (-violation - alpha_tilde * c.lambda) / (grad_sq_sum + alpha_tilde);
         c.lambda += delta_lambda;
         
         for (uint16_t i = 0; i < c.particle_count; ++i)
@@ -149,7 +149,7 @@ void XpbdSolver::SolveGlobalAreaConstraints(PhysicsWorld& world, const float inv
             const float w = world.particle_inv_masses_[curr_idx];
             if (w > 0.f)
             {
-                world.particle_positions_[curr_idx] += grads[i] * (w * delta_lambda);
+                world.PlusEqualParticlePosition(curr_idx, grads[i] * (w * delta_lambda));
             }
         }
     }
@@ -170,13 +170,13 @@ void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, con
         if (w_sum <= 1e-6f) continue;
             
         // Calculate current penetration depth.
-        float C = (world.particle_positions_[c.particle_idx] - c.contact_point).Dot(c.contact_normal);
-        if (C >= 0.f) continue;
+        const float violation = (world.GetParticlePosition(c.particle_idx) - c.contact_point).Dot(c.contact_normal);
+        if (violation >= 0.f) continue;
 
-        const float delta_lambda = -C / w_sum;
+        const float delta_lambda = -violation / w_sum;
 
         // Move particle
-        world.particle_positions_[c.particle_idx] += c.contact_normal * (delta_lambda * w_particle);
+        world.PlusEqualParticlePosition(c.particle_idx, c.contact_normal * (delta_lambda * w_particle));
         
         // Update rigid velocity (linear + angular)
         Vec2 impulse_n = c.contact_normal * delta_lambda * inv_sub_dt;
@@ -186,7 +186,7 @@ void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, con
         // ===== Tangent Friction =====
         
         // Compute relative velocity
-        Vec2 particle_vel = (world.particle_positions_[c.particle_idx] - world.particle_prev_positions_[c.particle_idx]) * inv_sub_dt;
+        Vec2 particle_vel = (world.GetParticlePosition(c.particle_idx) - world.GetParticlePrevPosition(c.particle_idx)) * inv_sub_dt;
         Vec2 rigid_contact_point_vel = world.velocities_[c.body_idx].val + Vec2::ZCross(world.angular_velocities_[c.body_idx].val, rb);
         Vec2 rel_vel = particle_vel - rigid_contact_point_vel;
         Vec2 rel_vel_tangent = rel_vel - c.contact_normal * rel_vel.Dot(c.contact_normal);
@@ -207,7 +207,7 @@ void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, con
         const float j_t_final = std::min(j_t_desired, max_friction);
         
         // Move particle (convert magnitude of impulse back to position correction)
-        world.particle_positions_[c.particle_idx] -= tangent_dir * (j_t_final * sub_dt) * w_particle;
+        world.PlusEqualParticlePosition(c.particle_idx, -(tangent_dir * (j_t_final * sub_dt) * w_particle));
         
         // Update rigid velocity
         Vec2 impulse_t = tangent_dir * j_t_final;
@@ -216,82 +216,23 @@ void XpbdSolver::SolveRigidParticleCollisionConstraints(PhysicsWorld& world, con
     }
 }
 
-void XpbdSolver::SolveParticleEdgeCollisionConstraints(PhysicsWorld& world)
-{
-    for (const auto& c : world.particle_edge_collision_constraints_) {
-        Vec2& p_pos = world.particle_positions_[c.body_a_particle_idx];
-        Vec2& a_pos = world.particle_positions_[c.body_b_p1_idx];
-        Vec2& b_pos = world.particle_positions_[c.body_b_p2_idx];
-        
-        // Compute current penetration.
-        Vec2 ab = b_pos - a_pos;
-        Vec2 proj = a_pos + ab * c.t; 
-        Vec2 diff = p_pos - proj;
-        
-        float C = diff.Dot(c.normal) - physics_config::kTwoParticlesThickness;
-        if (C >= 0.f) continue;
-        
-        const float w_p = world.particle_inv_masses_[c.body_a_particle_idx];
-        const float w_a = world.particle_inv_masses_[c.body_b_p1_idx];
-        const float w_b = world.particle_inv_masses_[c.body_b_p2_idx];
-
-        // grad_p = n, grad_a = -(1-t)n, grad_b = -t*n
-        const float w_sum = w_p + (1.f - c.t) * (1.f - c.t) * w_a + c.t * c.t * w_b;
-        
-        if (w_sum < 1e-6f) continue;
-
-        const float delta_lambda = -C / w_sum ;
-
-        // Move particles
-        p_pos += c.normal * (w_p * delta_lambda);
-        a_pos -= c.normal * ((1.f - c.t) * w_a * delta_lambda);
-        b_pos -= c.normal * (c.t * w_b * delta_lambda);
-        
-        // ===== tangent friction =====
-        
-        // Compute relative delta x.
-        Vec2 particle_dx = p_pos - world.particle_prev_positions_[c.body_a_particle_idx];
-        Vec2 edge_p1_dx = a_pos - world.particle_prev_positions_[c.body_b_p1_idx];
-        Vec2 edge_p2_dx = b_pos - world.particle_prev_positions_[c.body_b_p2_idx];
-        Vec2 proj_dx = edge_p1_dx * (1 - c.t) + edge_p2_dx * c.t;
-        Vec2 rel_dx = particle_dx - proj_dx;
-        Vec2 rel_dx_tangent = rel_dx - c.normal * rel_dx.Dot(c.normal);
-        const float rel_dx_tangent_len = rel_dx_tangent.Length();
-        
-        if (rel_dx_tangent_len <= 1e-6f) continue;
-        
-        Vec2 tangent_dir = rel_dx_tangent / rel_dx_tangent_len;
-        
-        const float mu = std::sqrt(world.particle_frictions_[c.body_a_particle_idx] * world.particle_frictions_[c.body_b_p1_idx]);
-        const float normal_dx = -C;
-        const float final_friction = std::min(rel_dx_tangent_len, normal_dx * mu);
-
-        const float delta_lambda_t = final_friction / w_sum;
-        
-        p_pos -= tangent_dir * delta_lambda_t * w_p;
-        a_pos += tangent_dir * delta_lambda_t * (1.f - c.t) * w_a;
-        b_pos += tangent_dir * delta_lambda_t * c.t * w_b;
-    }
-}
-
 void XpbdSolver::SolveRigidParticleJointConstraints(PhysicsWorld& world, const float inv_sub_dt)
 {
     for (auto& c : world.rigid_particle_joint_constraints_)
     {
         const float w_particle = world.particle_inv_masses_[c.particle_idx];
-        Vec2& particle_pos = world.particle_positions_[c.particle_idx];
         
         // Get joint point of rigid body in world space.
         Vec2 rb = world.rots_[c.body_idx].Mul(c.body_local_anchor);
         Vec2 body_anchor_world = rb + world.positions_[c.body_idx].val; 
         
         // Calculate C.
-        Vec2 body_anchor_to_particle = particle_pos - body_anchor_world;
-        float C = body_anchor_to_particle.Length();
-        if (C < 1e-6f && C > -1e-6f) continue;
+        Vec2 body_anchor_to_particle = world.GetParticlePosition(c.particle_idx) - body_anchor_world;
+        const float violation = body_anchor_to_particle.Length();
+        if (violation < 1e-6f && violation > -1e-6f) continue;
         
         // Get Gradient.
-        Vec2 dir = body_anchor_to_particle / C;
+        Vec2 dir = body_anchor_to_particle / violation;
         
         const auto& rigid_body = world.rigid_bodies_[c.body_idx];
         const float rb_cross_n = rb.Cross(dir);
@@ -299,12 +240,11 @@ void XpbdSolver::SolveRigidParticleJointConstraints(PhysicsWorld& world, const f
         const float w_sum = w_particle + w_rigid;
         
         if (w_sum <= 1e-6f) continue;
-            
 
-        const float delta_lambda = -C / w_sum;
+        const float delta_lambda = -violation / w_sum;
 
         // Move particle
-        particle_pos += dir * (delta_lambda * w_particle);
+        world.PlusEqualParticlePosition(c.particle_idx, dir * (delta_lambda * w_particle));
         
         // Update rigid velocity (linear + angular)
         Vec2 impulse_n = dir * delta_lambda * inv_sub_dt;
@@ -322,7 +262,7 @@ void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const
         const Vec2 anchor_world = anchor_offset + world.positions_[c.body_idx].val;
 
         // Anchor to Particle.
-        const Vec2 r = world.particle_positions_[c.particle_idx] - anchor_world;
+        const Vec2 r = world.GetParticlePosition(c.particle_idx) - anchor_world;
 
         const float r_sq = r.LengthSquared();
         if (r_sq < 1e-8f) return;
@@ -332,12 +272,12 @@ void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const
         
         // Calculate angle Constraint C (Use Cross Product to save std::atan2 overhead)
         Vec2 r_normalized = r / std::sqrt(r_sq);
-        const float C = rest_direction_world.Cross(r_normalized);
+        const float violation = rest_direction_world.Cross(r_normalized);
         
         // Gradients
         const Vec2 grad_particle = rest_direction_world.NormalWithoutNormalized();
         const Vec2 grad_body = -grad_particle;
-        const float grad_body_rot = -rest_direction_world.Dot(world.particle_positions_[c.particle_idx] - world.positions_[c.body_idx].val);
+        const float grad_body_rot = -rest_direction_world.Dot(world.GetParticlePosition(c.particle_idx) - world.positions_[c.body_idx].val);
         
         const RigidBodyComponent rigid_body = world.rigid_bodies_[c.body_idx];
         const float particle_inv_mass = world.particle_inv_masses_[c.particle_idx];
@@ -350,11 +290,11 @@ void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const
 
         if (denominator < 1e-8f) return;
         
-        const float delta_lambda = (-C - alpha * c.lambda) / denominator;
+        const float delta_lambda = (-violation - alpha * c.lambda) / denominator;
         c.lambda += delta_lambda;
 
         // Move particle
-        world.particle_positions_[c.particle_idx] += grad_particle * (particle_inv_mass * delta_lambda);
+        world.PlusEqualParticlePosition(c.particle_idx, grad_particle * (particle_inv_mass * delta_lambda));
         
         // Update rigid velocity (linear + angular)
         const float impulse_magnitude = delta_lambda * inv_sub_dt;
@@ -365,7 +305,7 @@ void XpbdSolver::SolveRigidParticleAngularConstraints(PhysicsWorld& world, const
 
 void XpbdSolver::FinalizeParticles(PhysicsWorld& world, const float inv_sdt)
 {
-    const uint32_t count = world.particle_positions_.size();
+    const uint32_t count = world.particle_inv_masses_.size();
     
     auto index_range = std::views::iota(uint32_t{0}, count);
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(),[&](auto i)
@@ -373,6 +313,241 @@ void XpbdSolver::FinalizeParticles(PhysicsWorld& world, const float inv_sdt)
         if (world.particle_inv_masses_[i] == 0.f) return;
     
         // Update the velocity based on the position correction.
-        world.particle_velocities_[i] = (world.particle_positions_[i] - world.particle_prev_positions_[i]) * inv_sdt;
+        world.particle_velocities_[i] = (world.GetParticlePosition(i) - world.GetParticlePrevPosition(i)) * inv_sdt;
     });
+}
+
+void XpbdSolver::BuildBatches(PhysicsWorld& world, const ParticleEdgeCollisionConstraintSoAView& particle_edge_collision_constraint_soa_view,
+                              int body_count, std::pmr::vector<std::vector<int32_t>>& batches)
+{
+    // used_by_batch[i][particle] = Does this batch already contain this particle?
+    std::pmr::vector<std::vector<uint8_t>> used_by_batch(&world.frame_arena_);
+    
+    for (auto i = 0; i < particle_edge_collision_constraint_soa_view.Size(); ++i)
+    {
+        const int32_t p_idx = particle_edge_collision_constraint_soa_view.p_idx[i];
+        const int32_t a_idx = particle_edge_collision_constraint_soa_view.a_idx[i];
+        const int32_t b_idx = particle_edge_collision_constraint_soa_view.b_idx[i];
+
+        const bool is_p_static = world.particle_inv_masses_[p_idx] == 0.f;
+        const bool is_a_static = world.particle_inv_masses_[a_idx] == 0.f;
+        const bool is_b_static = world.particle_inv_masses_[b_idx] == 0.f;
+        
+        int chosen = -1;
+
+        for (int j = 0; j < static_cast<int>(batches.size()); ++j)
+        {
+            bool conflict = false;
+
+            if (!is_p_static && used_by_batch[j][p_idx])
+            {
+                conflict = true;
+            }
+            
+            if (!is_a_static && used_by_batch[j][a_idx])
+            {
+                conflict = true;
+            }
+            
+            if (!is_b_static && used_by_batch[j][b_idx])
+            {
+                conflict = true;
+            }
+
+            if (!conflict)
+            {
+                chosen = j;
+                break;
+            }
+        }
+
+        if (chosen == -1)
+        {
+            chosen = static_cast<int>(batches.size());
+            batches.emplace_back();
+            used_by_batch.emplace_back(body_count, 0);
+        }
+
+        batches[chosen].push_back(i);
+
+        if (!is_p_static) used_by_batch[chosen][p_idx] = 1;
+        if (!is_a_static) used_by_batch[chosen][a_idx] = 1;
+        if (!is_b_static) used_by_batch[chosen][b_idx] = 1;
+    }
+}
+
+__attribute__((target("avx,avx2")))
+void XpbdSolver::SolveParticleEdgeBatchAvx2(PhysicsWorld& world, const std::span<int32_t> batch)
+{
+    using Clock = std::chrono::high_resolution_clock;
+    using Duration = std::chrono::duration<double, std::milli>;
+    
+    auto& [x, y, prev_x, prev_y] = world.particle_soa_view_;
+    const auto& [p_idx, a_idx, b_idx, ct, normal_x, normal_y] = 
+        world.particle_edge_collision_constraint_soa_view_;
+    
+    constexpr size_t w = 8;
+
+    const __m256 zero = _mm256_setzero_ps();
+    const __m256 one  = _mm256_set1_ps(1.0f);
+    const __m256 eps  = _mm256_set1_ps(1e-6f);
+    const __m256 thick = _mm256_set1_ps(physics_config::kTwoParticlesThickness);
+    
+    for (size_t i = 0; i + w <= batch.size(); i += w) {
+        // 1. Load 8 independent constraints.
+        auto start = Clock::now();
+        __m256i ci = _mm256_loadu_si256( reinterpret_cast<const __m256i*>( batch.data() + i));
+        const __m256i ip = _mm256_i32gather_epi32( p_idx.data(), ci, 4);
+        const __m256i ia = _mm256_i32gather_epi32( a_idx.data(), ci, 4);
+        const __m256i ib = _mm256_i32gather_epi32( b_idx.data(), ci, 4);
+        const __m256 t = _mm256_i32gather_ps( ct.data(), ci, 4);
+        const __m256 nx = _mm256_i32gather_ps( normal_x.data(), ci, 4);
+        const __m256 ny = _mm256_i32gather_ps( normal_y.data(), ci, 4);
+        
+        const __m256 q  = _mm256_sub_ps(one, t);
+
+        // 2. Gather current positions and inverse masses.
+        __m256 px = Gather8(x, ip);
+        __m256 py = Gather8(y, ip);
+        __m256 ax = Gather8(x, ia);
+        __m256 ay = Gather8(y, ia);
+        __m256 bx = Gather8(x, ib);
+        __m256 by = Gather8(y, ib);
+
+        const __m256 wp = Gather8(world.particle_inv_masses_, ip);
+        const __m256 wa = Gather8(world.particle_inv_masses_, ia);
+        const __m256 wb = Gather8(world.particle_inv_masses_, ib);
+        world.profile_data_.simd_gather_ms += Duration(Clock::now() - start).count();
+
+        // 3. Compute penetration C(violation).
+        start = Clock::now();
+        const __m256 abx = _mm256_sub_ps(bx, ax);
+        const __m256 aby = _mm256_sub_ps(by, ay);
+
+        const __m256 proj_x = _mm256_add_ps( ax, _mm256_mul_ps(abx, t));
+        const __m256 proj_y = _mm256_add_ps( ay, _mm256_mul_ps(aby, t));
+
+        const __m256 dx = _mm256_sub_ps(px, proj_x);
+        const __m256 dy = _mm256_sub_ps(py, proj_y);
+
+        const __m256 violation = _mm256_sub_ps( _mm256_add_ps( _mm256_mul_ps(dx, nx), _mm256_mul_ps(dy, ny)), thick);
+
+        // 4. Compute effective inverse mass.
+        const __m256 q2 = _mm256_mul_ps(q, q);
+        const __m256 t2 = _mm256_mul_ps(t, t);
+
+        const __m256 w_sum = _mm256_add_ps( wp, _mm256_add_ps( _mm256_mul_ps(q2, wa), _mm256_mul_ps(t2, wb)));
+
+        // active = (C < 0) && (w_sum >= 1e-6)
+        const __m256 penetrating = _mm256_cmp_ps( violation, zero, _CMP_LT_OQ);
+        const __m256 mass_ok = _mm256_cmp_ps( w_sum, eps, _CMP_GE_OQ);
+
+        const __m256 active = _mm256_and_ps( penetrating, mass_ok);
+
+        // Safe denominator for inactive lanes.
+        const __m256 safe_w_sum = _mm256_blendv_ps( one, w_sum, active);
+
+        __m256 dl = _mm256_div_ps( _mm256_sub_ps(zero, violation), safe_w_sum);
+
+        dl = _mm256_and_ps(dl, active);
+
+        // 5. Normal position correction.
+        px = _mm256_add_ps( px, _mm256_mul_ps(nx, _mm256_mul_ps(wp, dl)));
+        py = _mm256_add_ps( py, _mm256_mul_ps(ny, _mm256_mul_ps(wp, dl)));
+
+        ax = _mm256_sub_ps( ax, _mm256_mul_ps(nx, _mm256_mul_ps(q, _mm256_mul_ps(wa, dl))));
+        ay = _mm256_sub_ps( ay, _mm256_mul_ps(ny, _mm256_mul_ps(q, _mm256_mul_ps(wa, dl))));
+
+        bx = _mm256_sub_ps( bx, _mm256_mul_ps(nx, _mm256_mul_ps(t, _mm256_mul_ps(wb, dl))));
+        by = _mm256_sub_ps( by, _mm256_mul_ps(ny, _mm256_mul_ps(t, _mm256_mul_ps(wb, dl))));
+
+        // 6. Tangent friction.
+        // Important: use the positions AFTER normal correction.
+        const __m256 pdx = _mm256_sub_ps( px, Gather8(prev_x, ip));
+        const __m256 pdy = _mm256_sub_ps( py, Gather8(prev_y, ip));
+
+        const __m256 adx = _mm256_sub_ps( ax, Gather8(prev_x, ia));
+        const __m256 ady = _mm256_sub_ps( ay, Gather8(prev_y, ia));
+
+        const __m256 bdx = _mm256_sub_ps( bx, Gather8(prev_x, ib));
+        const __m256 bdy = _mm256_sub_ps( by, Gather8(prev_y, ib));
+
+        const __m256 edge_dx = _mm256_add_ps( _mm256_mul_ps(adx, q), _mm256_mul_ps(bdx, t));
+        const __m256 edge_dy = _mm256_add_ps( _mm256_mul_ps(ady, q), _mm256_mul_ps(bdy, t));
+
+        const __m256 rel_x = _mm256_sub_ps(pdx, edge_dx);
+        const __m256 rel_y = _mm256_sub_ps(pdy, edge_dy);
+
+        const __m256 normal_dot = _mm256_add_ps( _mm256_mul_ps(rel_x, nx), _mm256_mul_ps(rel_y, ny));
+
+        __m256 tx = _mm256_sub_ps( rel_x, _mm256_mul_ps(nx, normal_dot));
+        __m256 ty = _mm256_sub_ps( rel_y, _mm256_mul_ps(ny, normal_dot));
+
+        const __m256 tangent_len = _mm256_sqrt_ps( _mm256_add_ps( _mm256_mul_ps(tx, tx), _mm256_mul_ps(ty, ty)));
+
+        const __m256 friction_active = _mm256_and_ps( active, _mm256_cmp_ps(tangent_len, eps, _CMP_GT_OQ));
+
+        const __m256 safe_len = _mm256_blendv_ps( one, tangent_len, friction_active);
+
+        tx = _mm256_div_ps(tx, safe_len);
+        ty = _mm256_div_ps(ty, safe_len);
+
+        const __m256 mu = _mm256_sqrt_ps( _mm256_mul_ps( Gather8(world.particle_frictions_, ip), Gather8(world.particle_frictions_, ia)));
+
+        const __m256 normal_dx = _mm256_sub_ps(zero, violation);
+
+        const __m256 final_friction = _mm256_min_ps( tangent_len, _mm256_mul_ps(normal_dx, mu));
+
+        __m256 dt = _mm256_div_ps( final_friction, safe_w_sum);
+
+        dt = _mm256_and_ps(dt, friction_active);
+
+        px = _mm256_sub_ps( px, _mm256_mul_ps(tx, _mm256_mul_ps(dt, wp)));
+        py = _mm256_sub_ps( py, _mm256_mul_ps(ty, _mm256_mul_ps(dt, wp)));
+
+        ax = _mm256_add_ps( ax, _mm256_mul_ps(tx, _mm256_mul_ps(dt, _mm256_mul_ps(q, wa))));
+        ay = _mm256_add_ps( ay, _mm256_mul_ps(ty, _mm256_mul_ps(dt, _mm256_mul_ps(q, wa))));
+
+        bx = _mm256_add_ps( bx, _mm256_mul_ps(tx, _mm256_mul_ps(dt, _mm256_mul_ps(t, wb))));
+        by = _mm256_add_ps( by, _mm256_mul_ps(ty, _mm256_mul_ps(dt, _mm256_mul_ps(t, wb))));
+        world.profile_data_.simd_compute_ms += Duration(Clock::now() - start).count();
+        
+        // 7. Save indices and final positions.
+        // AVX2 has no native scatter instruction.
+        start = Clock::now();
+        alignas(32) int32_t pi[8], ai[8], bi[8];
+        alignas(32) float px_out[8], py_out[8];
+        alignas(32) float ax_out[8], ay_out[8];
+        alignas(32) float bx_out[8], by_out[8];
+
+        _mm256_store_si256( reinterpret_cast<__m256i*>(pi), ip);
+        _mm256_store_si256( reinterpret_cast<__m256i*>(ai), ia);
+        _mm256_store_si256( reinterpret_cast<__m256i*>(bi), ib);
+
+        _mm256_store_ps(px_out, px);
+        _mm256_store_ps(py_out, py);
+        _mm256_store_ps(ax_out, ax);
+        _mm256_store_ps(ay_out, ay);
+        _mm256_store_ps(bx_out, bx);
+        _mm256_store_ps(by_out, by);
+
+        for (int lane = 0; lane < 8; ++lane) {
+            x[pi[lane]] = px_out[lane];
+            y[pi[lane]] = py_out[lane];
+
+            x[ai[lane]] = ax_out[lane];
+            y[ai[lane]] = ay_out[lane];
+
+            x[bi[lane]] = bx_out[lane];
+            y[bi[lane]] = by_out[lane];
+        }
+        world.profile_data_.simd_scatter_ms += Duration(Clock::now() - start).count();
+    }
+
+    // Handle the remaining end - begin (mod 8) constraints with the original scalar implementation.
+    auto start = Clock::now();
+    auto r = batch.size() % w;
+    auto r_batch = std::span(batch).subspan(batch.size() - r, r);
+    SolveParticleEdgeCollisionConstraints(world, r_batch);
+    world.profile_data_.handle_remain_ms += Duration(Clock::now() - start).count();
 }

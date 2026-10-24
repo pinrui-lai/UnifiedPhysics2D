@@ -42,7 +42,8 @@ void CollisionBroadPhase::BuildGlobalBvh(PhysicsWorld& world, std::span<Aabb> wo
         float max_x = std::numeric_limits<float>::lowest();
         float max_y = std::numeric_limits<float>::lowest();
         
-        for (const auto& pos : world.GetSoftBodyParticlePositions(i))
+        auto body_particles_pos = world.GetSoftBodyParticlePositions(i);
+        for (const auto& pos : body_particles_pos)
         {
             min_x = std::min(min_x, pos.x);
             min_y = std::min(min_y, pos.y);

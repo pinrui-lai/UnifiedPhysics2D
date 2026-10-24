@@ -1,6 +1,6 @@
 #include <algorithm>
 #include <array>
-#include <numbers>
+#include <ranges>
 #include <SDL3/SDL.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
@@ -133,6 +133,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     const auto& shapes = world.GetShapes();
     const auto& particle_positions = world.GetParticlePositions();
     const auto& soft_body_handles = world.GetSoftBodyHandles();
+    
     // ==== Rigid Body ====
     for (int i = 0; i < shapes.size(); i++)
     {
@@ -279,7 +280,7 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     
     ImGui::Indent(indent_len);
     ImGui::Text("Rigid Bodies: %zu, Soft Bodies: %zu, Particles: %zu",
-        world.GetPositions().size(), world.GetSoftBodyHandles().size(), world.GetParticlePositions().size());
+        world.GetPositions().size(), world.GetSoftBodyHandles().size(), world.GetParticlePositionsX().size());
     
     ImGui::Text("Manifolds: %zu\nParticle-Rigid Contacts: %zu\nParticle-Edge Contacts: %zu",
         world.GetManifolds().size(), world.GetParticleRigidConstraintsSize(), world.GetParticleEdgeConstraintsSize());
@@ -301,8 +302,12 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
                 world.profile_data_.soft_soft_ms, world.profile_data_.ss_update_local_aabb_bvh, world.profile_data_.ss_detection);
     
     ImGui::Spacing();
-    ImGui::Text("Solve XPBD Constraint: %.5f ms\nSolve Sequential Impulse Constraint: %.5f ms",
-        world.profile_data_.solve_xpbd_constraints_ms, world.profile_data_.solve_si_constraints_ms);
+    ImGui::Text("Solve XPBD Constraint: %.5f ms\n  Soft-Soft Collision Constraint: %.5f ms\n    Build Batch: %.5f ms\n    SIMD Gather: %.5f ms"
+                "\n    SIMD Compute: %.5f ms\n    SIMD Scatter: %.5f ms\n    Handle Remain: %.5f ms",
+        world.profile_data_.solve_xpbd_constraints_ms, world.profile_data_.solve_ss_ms, world.profile_data_.build_batch_ms,
+        world.profile_data_.simd_gather_ms, world.profile_data_.simd_compute_ms, world.profile_data_.simd_scatter_ms, world.profile_data_.handle_remain_ms);
+
+    ImGui::Text("Solve Sequential Impulse Constraint: %.5f ms", world.profile_data_.solve_si_constraints_ms);
     
     ImGui::Spacing();
     ImGui::Text("Integrate Rigid Pos: %.5f ms\nUpdate Particle Vel: %.5f ms",
@@ -467,6 +472,9 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
     ImGui::Indent(indent_len);
     ImGui::Checkbox("Use Single-Thread(Rigid-Rigid&Soft-Soft Narrow-Phase)", &world.use_single_thread_);
     ImGui::Checkbox("Use Local BVH in Soft-Soft Narrow-Phase", &world.use_local_bvh_);
+    ImGui::BeginDisabled();
+    ImGui::Checkbox("Use SIMD Soft-Soft Solver(Performance tuning in progress)", &world.use_simd_ss_solver_);
+    ImGui::EndDisabled();
     ImGui::Checkbox("Draw Contact Info", &world.show_debug_contact_points_);
     ImGui::Checkbox("Draw Incident/Reference Edge(single-thread only)", &world.show_debug_clipping_);
     ImGui::Checkbox("Draw Particle of Soft Body", &draw_particle_);

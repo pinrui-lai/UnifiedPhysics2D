@@ -84,6 +84,21 @@ struct Manifold
     Manifold(const uint32_t a, const uint32_t b) : a(a), b(b){}
 };
 
+struct ParticleSoAView {
+    alignas(32) std::vector<float> x;
+    alignas(32) std::vector<float> y;
+    alignas(32) std::vector<float> prev_x;
+    alignas(32) std::vector<float> prev_y;
+    
+    void Clear()
+    {
+        x.clear();
+        y.clear();
+        prev_x.clear();
+        prev_y.clear();
+    }
+};
+
 struct XpbdDistanceConstraint
 {
     uint32_t p1;
@@ -139,10 +154,60 @@ struct XpbdGlobalAreaConstraint
 
 struct XpbdParticleEdgeCollisionConstraint {
     Vec2 normal;
-    uint32_t body_a_particle_idx;
-    uint32_t body_b_p1_idx;
-    uint32_t body_b_p2_idx;
+    int32_t body_a_particle_idx;
+    int32_t body_b_p1_idx;
+    int32_t body_b_p2_idx;
     float t; // The ratio of the projected points on the line segment is [0, 1].
+};
+
+struct ParticleEdgeCollisionConstraintSoAView {
+    alignas(32) std::vector<int32_t> p_idx;
+    alignas(32) std::vector<int32_t> a_idx;
+    alignas(32) std::vector<int32_t> b_idx;
+    alignas(32) std::vector<float> t;
+    alignas(32) std::vector<float> normal_x;
+    alignas(32) std::vector<float> normal_y;
+    
+    size_t Size() const { return p_idx.size(); }
+    
+    void Resize(const uint32_t new_size)
+    {
+        p_idx.resize(new_size);
+        a_idx.resize(new_size);
+        b_idx.resize(new_size);
+        normal_x.resize(new_size);
+        normal_y.resize(new_size);
+        t.resize(new_size);
+    }
+    
+    void Clear()
+    {
+        p_idx.clear();
+        a_idx.clear();
+        b_idx.clear();
+        t.clear();
+        normal_x.clear();
+        normal_y.clear();
+    }
+    
+    XpbdParticleEdgeCollisionConstraint GetConstraint(const uint32_t i)
+    {
+        return {
+            .normal = {normal_x[i], normal_y[i]},
+            .body_a_particle_idx = p_idx[i], .body_b_p1_idx = a_idx[i],
+            .body_b_p2_idx = b_idx[i], .t = t[i]
+        };
+    }
+    
+    void SetConstraint(const uint32_t i, const XpbdParticleEdgeCollisionConstraint& c)
+    {
+        p_idx[i] = c.body_a_particle_idx;
+        a_idx[i] = c.body_b_p1_idx;
+        b_idx[i] = c.body_b_p2_idx;
+        normal_x[i] = c.normal.x;
+        normal_y[i] = c.normal.y;
+        t[i] = c.t;
+    }
 };
 
 struct BodyHandle

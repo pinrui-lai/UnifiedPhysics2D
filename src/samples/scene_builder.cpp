@@ -112,14 +112,14 @@ namespace scenes
         for (uint16_t x = 0; x < res_x; ++x)
         {
             const uint32_t particle_index = cloth.start_particle_idx + x;
-            const Vec2 particle_pos = world.GetParticlePositions()[particle_index];
+            const Vec2 particle_pos = world.GetParticlePosition(particle_index);
             world.AddRigidParticleJointConstraint( particle_index, objects.ceiling.id, {particle_pos.x - ceiling_pos.x, -ceiling_half_height});
         }
         
         // Hanging Box
         constexpr float hang_box_half_width = 0.8f;
         constexpr uint32_t hang_rope_segments = 5;
-        const uint32_t hang_rope_start_idx = world.GetParticlePositions().size();
+        const uint32_t hang_rope_start_idx = world.GetParticlePositionsX().size();
         const uint32_t hang_rope_end_idx = hang_rope_start_idx  + hang_rope_segments;
         const Vec2 hang_rope_start_pos{cloth_center.x + cloth_width * 0.5f + hang_box_half_width + 1.f, ceiling_pos.y - 1.f};
         const Vec2 hang_rope_end_pos{hang_rope_start_pos.x, hang_rope_start_pos.y - 3.f};
