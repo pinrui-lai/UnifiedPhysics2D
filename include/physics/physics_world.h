@@ -19,6 +19,7 @@ class CollisionDetectionSystem;
 class MovementSystem;
 
 struct PhysicsProfileData {
+    double physics_update_ms = 0.0;
     double integrate_rigid_vel = 0.0;
     double predict_particle_pos = 0.0;
     
@@ -48,6 +49,7 @@ struct PhysicsProfileData {
     double update_particle_vel = 0.0;
 
     void Reset() {
+        physics_update_ms = 0.0;
         integrate_rigid_vel = 0.0;
         predict_particle_pos = 0.0;
         

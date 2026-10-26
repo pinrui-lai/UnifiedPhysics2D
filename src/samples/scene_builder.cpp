@@ -26,16 +26,37 @@ namespace scenes
             CreateBoxStressTest(world, viewport, settings);
             break;
             
-        case PresetScene::kPressureCircleStressTest:
-            CreatePressureCircleStressTest(world, viewport, settings);
+        case PresetScene::kBigPressureCircleStressTest:
+            CreateBigPressureCircleStressTest(world, viewport, settings);
+            break;
+            
+        case PresetScene::kSmallPressureCircleStressTest:
+            CreateSmallPressureCircleStressTest(world, viewport, settings);
             break;
             
         case PresetScene::kRopeStressTest:
             CreateRopeStressTest(world, viewport);
             break;
+            
+        case PresetScene::kEmpty:
+            CreateEmpty(world, viewport, settings);
+            break;
         }
         
         return {};
+    }
+
+    float SceneBuilder::CreateColumn(PhysicsWorld& world, const float floor_top, float x, const uint32_t box_count, const float half_width, 
+        const float half_height, const float mass, const float restitution, const float friction)
+    {
+        for (uint32_t i = 0; i < box_count; ++i)
+        {
+            const float y = floor_top + (2.f * static_cast<float>(i) + 1.f) * half_height;
+            world.CreateBox({x, y}, 0.f, {0.f, 0.f}, 0.f, mass,
+                            half_width, half_height, restitution, friction);
+        }
+
+        return floor_top + 2.f * static_cast<float>(box_count) * half_height;
     }
 
     SceneObjects SceneBuilder::CreateDefaultDemo(PhysicsWorld& world, const ViewportSize viewport, const SceneSettings& settings)
@@ -59,7 +80,9 @@ namespace scenes
         objects.floating_circle2 = world.CreateCircle( {floating_circle_pos.x + 2.5f, floating_circle_pos.y}, 
             0.f, {0.f, 0.f}, settings.floating_angular_velocity, 
             0.f, 1.75f, settings.floating_restitution, settings.floating_friction);
-
+        
+        world.CreateSoftCircle({floating_circle_pos.x + 0.9f, floating_circle_pos.y + 4.f}, 1.4f, 20, 15.f, 0.9f, 0.001f);
+        
         const Vec2 floating_wide_box_pos = Vec2{400.f, static_cast<float>(h) / 2.f } * physics_config::kMpp;
         objects.floating_wide_box1 = world.CreateBox(floating_wide_box_pos, 0.f,
             {0.f, 0.f}, settings.floating_angular_velocity,
@@ -80,7 +103,20 @@ namespace scenes
         const Vec2 floor_pos{ w / 2.f * mpp, 0.f };
         objects.floor = world.CreateBox( floor_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, w / 2.f * mpp, 1.f, settings.boundary_restitution, settings.boundary_friction);
-
+        
+        const float floor_top = floor_pos.y + 1.f;
+        CreateColumn(world, floor_top, w / 2 * mpp, 10, 0.5f, 0.5f, 1.f, 0.3f, 0.2f);
+        
+        // Slope
+        const Vec2 slope_pos{ w * mpp - 5.f, 3.f };
+        world.CreateBox( slope_pos, 0.4f, {0.f, 0.f}, 0.f, 
+            0.f, 5.f, 0.1f, settings.boundary_restitution, settings.boundary_friction);
+        
+        // Car on slope
+        world.CreateCar({slope_pos.x - 1.f, slope_pos.y + 2.f}, 0.7f, 20.f, 0.7f, 0.05f,
+            1.5f, 3.5f, 0.0005f,
+            3.f, 1.f, 10.f, 0.f, 0.5f);
+        
         // Left wall.
         const Vec2 left_wall_pos{ 10.f * mpp, h / 2.f * mpp };
         objects.left_wall = world.CreateBox( left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
@@ -98,15 +134,28 @@ namespace scenes
         const Vec2 rope_end_pos{rope_start_pos.x + 12.f, rope_start_pos.y};
         world.CreateRope(rope_start_pos, rope_end_pos, 64,  20, 0.5f, 0.00001f, true, true);
         
+        // Falling bodies on rope.
+        SpawnFalling( {rope_start_pos.x + 7.f, rope_start_pos.y + 2.f}, 5, 1.0f, 0.0f, [&](const Vec2& pos)
+        {
+            return world.CreateCircle( pos, 0.0f, Vec2{0.0f, 0.0f}, 0.0f, 0.5f, 0.5f, 0.1f, 0.1f );
+        });
+        
+        SpawnFalling( {rope_start_pos.x + 7.f, rope_start_pos.y + 2.f}, 5, 1.0f, 0.0f, [&](const Vec2& pos)
+        {
+            return world.CreateBox(pos, 0.0f, Vec2{0.0f, 0.0f}, 0.f, 0.5f, 0.5f, 0.5f, 0.1f, 0.1f);
+        });
+        
+        world.CreatePressureSoftCircle({rope_start_pos.x + 1.f, floating_circle_pos.y + 3.f}, 1.4f, 40, 3.f, 0.4f, 0.f);
+        
         // Hanging Cloth
         constexpr float cloth_width = 5.f;
         constexpr float cloth_height = 3.f;
-        constexpr uint16_t res_x = 13;
-        constexpr uint16_t res_y = 9;
+        constexpr uint16_t res_x = 15;
+        constexpr uint16_t res_y = 11;
 
         const Vec2 cloth_center{ ceiling_pos.x * 0.25f, ceiling_pos.y - ceiling_half_height - cloth_height * 0.5f };
         const SoftBodyHandle cloth = world.CreateSoftBox( cloth_center, cloth_width, cloth_height,
-            res_x, res_y, 4.f, 0.5f, 0.001f, 0.01f);
+            res_x, res_y, 15.f, 0.5f, 0.001f, 0.01f);
 
         // Connect each particle on top of the cloth to the ceiling.
         for (uint16_t x = 0; x < res_x; ++x)
@@ -117,20 +166,58 @@ namespace scenes
         }
         
         // Hanging Box
-        constexpr float hang_box_half_width = 0.8f;
-        constexpr uint32_t hang_rope_segments = 5;
+        constexpr float hang_box_half_extent = 0.8f;
+        constexpr uint32_t hang_rope_segments = 3;
         const uint32_t hang_rope_start_idx = world.GetParticlePositionsX().size();
         const uint32_t hang_rope_end_idx = hang_rope_start_idx  + hang_rope_segments;
-        const Vec2 hang_rope_start_pos{cloth_center.x + cloth_width * 0.5f + hang_box_half_width + 1.f, ceiling_pos.y - 1.f};
-        const Vec2 hang_rope_end_pos{hang_rope_start_pos.x, hang_rope_start_pos.y - 3.f};
+        const Vec2 hang_rope_start_pos{cloth_center.x + cloth_width * 0.5f + hang_box_half_extent + 1.5f, ceiling_pos.y - 1.f};
+        const Vec2 hang_rope_end_pos{hang_rope_start_pos.x, hang_rope_start_pos.y - 2.5f};
         const uint32_t hang_rope_handle_idx = world.GetSoftBodyHandles().size();
         world.CreateRope(hang_rope_start_pos, hang_rope_end_pos, hang_rope_segments, 2.f, 0.5f, 0.f, true, false);
         
         const uint32_t hang_box_idx = world.GetPositions().size();
-        world.CreateBox(hang_rope_end_pos, 0.f, {8.f, 0.f}, 0.f, 3.f, hang_box_half_width, 0.8f, 0.5f, 0.5f);
+        world.CreateBox(hang_rope_end_pos, 0.f, {8.f, 0.f}, 0.f, 30.f, hang_box_half_extent, hang_box_half_extent, 0.5f, 0.5f);
         world.AddRigidParticleJointConstraint(hang_rope_end_idx, hang_box_idx, {0.f, 0.f});
         world.AddRigidSoftCollisionIgnore(hang_box_idx, hang_rope_handle_idx);
 
+        return objects;
+    }
+
+    SceneObjects SceneBuilder::CreateEmpty(PhysicsWorld& world, const ViewportSize viewport, const SceneSettings& settings)
+    {
+        SceneObjects objects{};
+
+        const float w = static_cast<float>(viewport.width);
+        const float h = static_cast<float>(viewport.height);
+        constexpr float mpp = physics_config::kMpp;
+        
+        // Ceiling.
+        const Vec2 ceiling_pos{ w / 2.f * mpp, (h + 15.f) * mpp };
+        constexpr float ceiling_half_height = 1.f;
+        const float ceiling_half_width = w / 2.f * mpp;
+        objects.ceiling = world.CreateBox( ceiling_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, ceiling_half_width, ceiling_half_height, settings.boundary_restitution, settings.boundary_friction);
+
+        // Floor.
+        const Vec2 floor_pos{ w / 2.f * mpp, 0.f };
+        objects.floor = world.CreateBox( floor_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, w / 2.f * mpp, 1.f, settings.boundary_restitution, settings.boundary_friction);
+        
+        // Left wall.
+        const Vec2 left_wall_pos{ 10.f * mpp, h / 2.f * mpp };
+        objects.left_wall = world.CreateBox( left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
+
+        // Right wall.
+        const Vec2 right_wall_pos{ (w - 10.f) * mpp, h / 2.f * mpp };
+        objects.right_wall = world.CreateBox( right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
+        
+        // Slope
+        const Vec2 slope_pos{ w * mpp - 5.f, 3.f };
+        world.CreateBox( slope_pos, 0.4f, {0.f, 0.f}, 0.f, 
+            0.f, 5.f, 0.1f, settings.boundary_restitution, settings.boundary_friction);
+        
         return objects;
     }
 
@@ -180,7 +267,7 @@ namespace scenes
             const int boxes_in_row = box_count_per_base - row;
 
             // Center each layer horizontally
-            const float row_width = boxes_in_row * box_width + (boxes_in_row - 1) * horizontal_spacing;
+            const float row_width = static_cast<float>(boxes_in_row) * box_width + static_cast<float>(boxes_in_row - 1) * horizontal_spacing;
 
             const float start_x = pyramid_center_x - row_width * 0.5f + box_half_width;
 
@@ -220,43 +307,27 @@ namespace scenes
         objects.floor = world.CreateBox( {center_x, 0.f}, 0.f, {0.f, 0.f}, 0.f, 
             0.f, world_width * 0.5f, floor_half_height, settings.boundary_restitution, settings.boundary_friction);
         
-        // Helper: create a column from stacked boxes
-        // Each box rests directly on the box beneath it.
-        // Returns the world-space Y coordinate of the column's top surface.
-        const auto create_column = [&](float x, const uint32_t box_count, const float half_width, const float half_height) -> float
-        {
-            for (uint32_t i = 0; i < box_count; ++i)
-            {
-                const float y = floor_top + (2.f * static_cast<float>(i) + 1.f) * half_height;
-
-                world.CreateBox({x, y}, 0.f, {0.f, 0.f}, 0.f, box_mass,
-                    half_width, half_height, box_restitution, box_friction);
-            }
-
-            return floor_top + 2.f * static_cast<float>(box_count) * half_height;
-        };
-        
         // Outer left:
         // relatively narrow and short.
         const float outer_left_x = center_x - 4.1f;
-        create_column( outer_left_x, 10, 0.30f, 0.35f);
+        CreateColumn(world, floor_top, outer_left_x, 10, 0.30f, 0.35f, box_mass, box_restitution, box_friction);
 
         // Inner left:
         // 8 boxes, wider segments.
         // Total column height = 8 * (2 * 0.35) = 5.6.
         const float arch_left_x = center_x - 1.8f;
-        const float arch_left_top = create_column( arch_left_x, 8, 0.42f, 0.35f);
+        const float arch_left_top = CreateColumn(world, floor_top, arch_left_x, 8, 0.42f, 0.35f, box_mass, box_restitution, box_friction);
 
         // Inner right:
         // 10 boxes, narrower segments vertically.
         // Total column height = 10 * (2 * 0.28) = 5.6.
         const float arch_right_x = center_x + 1.8f;
-        const float arch_right_top = create_column( arch_right_x, 10, 0.48f, 0.28f);
+        const float arch_right_top = CreateColumn(world, floor_top, arch_right_x, 10, 0.48f, 0.28f, box_mass, box_restitution, box_friction);
 
         // Outer right:
         // taller than the outer-left column.
         const float outer_right_x = center_x + 4.1f;
-        create_column( outer_right_x, 10, 0.27f, 0.30f);
+        CreateColumn(world, floor_top, outer_right_x, 10, 0.27f, 0.30f, box_mass, box_restitution, box_friction);
         
         // Wide horizontal beam: the arch-like structure
         // Both support columns are designed to have the same top height. max() guards against tiny round-off differences in their calculated heights.
@@ -294,8 +365,8 @@ namespace scenes
         // Hanging cloth
         constexpr float cloth_width = 5.f;
         constexpr float cloth_height = 3.f;
-        constexpr uint16_t res_x = 13;
-        constexpr uint16_t res_y = 9;
+        constexpr uint16_t res_x = 15;
+        constexpr uint16_t res_y = 11;
 
         const Vec2 cloth_center{ beam_center.x, beam_center.y - beam_half_height - cloth_height * 0.5f };
 
@@ -414,7 +485,7 @@ namespace scenes
         if (columns <= 0 || rows <= 0) return;
         
         // Center the boxes between the left and right walls.
-        const float total_width = columns * box_size + (columns - 1) * gap;
+        const float total_width = static_cast<float>(columns) * box_size + static_cast<float>(columns - 1) * gap;
         const float first_x = (bounds.left_inner_x + bounds.right_inner_x - total_width) * 0.5f + box_half_extent;
 
         // The first row is located above the floor.
@@ -453,7 +524,7 @@ namespace scenes
         if (columns <= 0 || rows <= 0) return;
         
         // Center the soft bodies between the left and right walls.
-        const float total_width = columns * circle_diameter + (columns - 1) * gap;
+        const float total_width = static_cast<float>(columns) * circle_diameter + static_cast<float>(columns - 1) * gap;
         const float first_x = (bounds.left_inner_x + bounds.right_inner_x - total_width) * 0.5f + radius;
 
         // The first row is located above the floor.

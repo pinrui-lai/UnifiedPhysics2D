@@ -15,11 +15,12 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_Window* window = SDL_CreateWindow("SDL3 + ImGui Drawing Demo", 1920, 1080, SDL_WINDOW_RESIZABLE);
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
     if (!window || !renderer) {
         SDL_Log("Window/Renderer Creation Error: %s", SDL_GetError());
         return -1;
     }
+    SDL_SetRenderVSync(renderer, 1);
     
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

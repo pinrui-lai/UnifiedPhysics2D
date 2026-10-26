@@ -491,7 +491,8 @@ void PhysicsWorld::Step(const float dt)
     using Clock = std::chrono::high_resolution_clock;
     using Duration = std::chrono::duration<double, std::milli>;
     profile_data_.Reset();
-    
+
+    const auto physics_update_start = Clock::now();
     constexpr int sub_steps = 4;
     const float sub_dt = dt / static_cast<float>(sub_steps);
     const float inv_sub_dt = 1.f / sub_dt;
@@ -667,6 +668,7 @@ void PhysicsWorld::Step(const float dt)
         XpbdSolver::FinalizeParticles(*this, 1.f/sub_dt);
         profile_data_.update_particle_vel += Duration(Clock::now() - start).count();
     }
+    profile_data_.physics_update_ms = Duration(Clock::now() - physics_update_start).count();
 }
 
 std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const BoxShape& box_shape, const uint32_t i) const

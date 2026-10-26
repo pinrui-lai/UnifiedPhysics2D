@@ -20,10 +20,12 @@ enum class SpawnType {
 class Application
 {
 public:
+    void Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world);
     void CreateInitialBodies(SDL_Window* window, PhysicsWorld& world, scenes::PresetScene preset = scenes::PresetScene::kDefaultDemo);
     void Input(SDL_Window* window, bool &is_running, PhysicsWorld& world);
     static void Update(PhysicsWorld& world, float dt);
-    void Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorld& world);
+    
+private:
     void RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& world, int window_width);
     void SpawnBodyAt(PhysicsWorld& world, SpawnType type, Vec2 spawn_pos) const;
     void RenderSpawnTypeConfigUi(SpawnType type);
@@ -31,10 +33,9 @@ public:
     static ImU32 GetDepthColor(int depth, float alpha = 1.f);
     static void DrawBvhNode(ImDrawList* draw_list, std::span<const BvhNode> nodes, int node_idx, int current_depth, int max_render_depth, int& hovered_node_idx, float window_height);
     static void RenderBvhDebug(std::span<const BvhNode> nodes, int root_idx, int max_render_depth, float window_height);
-    static ImVec2 GetAabbCenter(const Aabb& aabb) { return ImVec2((aabb.min_x + aabb.max_x) * 0.5f, (aabb.min_y + aabb.max_y) * 0.5f); }
+    static ImVec2 GetAabbCenter(const Aabb& aabb) { return {(aabb.min_x + aabb.max_x) * 0.5f, (aabb.min_y + aabb.max_y) * 0.5f}; }
     static bool AabbContains(const Aabb& aabb, const ImVec2 p) { return p.x >= aabb.min_x && p.x <= aabb.max_x && p.y >= aabb.min_y && p.y <= aabb.max_y; }
     
-private:
     double render_time_ms_{0};
     scenes::SceneObjects scene_objects_;
     
