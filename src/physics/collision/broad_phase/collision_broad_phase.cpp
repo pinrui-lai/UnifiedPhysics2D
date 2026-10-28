@@ -171,8 +171,7 @@ void CollisionBroadPhase::QueryBvh(const PhysicsWorld& world, std::span<const Aa
                     if (world.soft_soft_collision_ignore_.contains(MakePairKey(query_soft_idx, soft_idx))) continue;
                     
                     if (query_soft_idx < soft_idx) {
-                        soft_soft_contacts.emplace_back(query_soft_idx, soft_idx); // a's particles to b's edges
-                        soft_soft_contacts.emplace_back(soft_idx, query_soft_idx); // b's particles to a's edges
+                        soft_soft_contacts.emplace_back(query_soft_idx, soft_idx);
                     }
                 }
             }
