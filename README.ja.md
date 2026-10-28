@@ -68,7 +68,8 @@ Broad Phase ではソフトボディ全体の AABB を用いてグローバル B
 
 - `std::pmr::monotonic_buffer_resource` による一時メモリ確保コスト削減
 - `std::execution` による拘束解法以外の並列化
-- マルチスレッド環境で `thread_local` と `std::atomic` を活用し、メモリ確保を減らすとともに、共有メモリへのアクセスの安全性を確保する
+- マルチスレッド環境で、メモリ確保を減らすために `thread_local` を使用する。
+- マルチスレッド環境で、スレッド間で共有されるデータへのアクセスをスレッドセーフにするために `std::atomic` を使用する。
 - XPBD の角度拘束には、あらかじめ目標角度を方向ベクトルに変換しておく。これにより、角度拘束の評価時には、アンカーから粒子へのベクトルと目標方向ベクトルの外積を拘束関数 \(C\) として用いることができ、逆三角関数による角度の算出の計算コストを削減できる
 - delta_time など、繰り返し除数として使用される値の逆数を事前に求めておき、以降の計算で乗算を利用することで、除算の実行回数を削減する
 - 剛体の回転角度の正弦・余弦のキャッシュ
@@ -77,24 +78,25 @@ Broad Phase ではソフトボディ全体の AABB を用いてグローバル B
 
 <table>
   <tr>
-    <th>Soft Circle Stress Test</th>
-    <th>Box Stress Test</th>
+    <th colspan="2">Soft Circle Stress Test & Box Stress Test</th>
   </tr>
   <tr>
     <td>
-      <img src="assets/SoftCircleStress.jpg" alt="SoftCircleStress.jpg">
+        <img src="assets/BoxStressWide.jpg" alt="BoxStressWide.jpg">
     </td>
+  </tr>
+  <tr>
     <td>
-      <img src="assets/BoxStress.jpg" alt="BoxStress.jpg">
+        <img src="assets/SoftCircleStressWide.jpg" alt="SoftCircleStressWide.jpg">
     </td>
   </tr>
 </table>
 
-以下の表は、上の左側の画像に示されている **Soft Circle Stress Test** の性能測定結果を示しています。
+以下の表は、上の画像に示されている **Soft Circle Stress Test** の性能測定結果を示しています。
 
 <table>
   <tr>
-    <th colspan="3">Soft Circle Stress Test / CPU: AMD R5 5600</th>
+    <th colspan="3">Soft Circle Stress Test / 68 Soft Circles / 6800 particles / ≈ 165 soft-soft pairs / ≈ 1200 particle-edge contacts / CPU: AMD R5 5600</th>
   </tr>
   <tr>
     <th>Soft-Soft Detection</th>
@@ -103,13 +105,13 @@ Broad Phase ではソフトボディ全体の AABB を用いてグローバル B
   </tr>
   <tr>
     <th>Local BVH</th>
-    <th>0.42ms</th>
-    <th>1.20ms</th>
+    <th>≈ 0.75ms</th>
+    <th>≈ 2.90ms</th>
   </tr>
   <tr>
     <th>Brute Force</th>
-    <th>0.76ms</th>
-    <th>3.85ms</th>
+    <th>≈ 1.47ms</th>
+    <th>≈ 8.30ms</th>
   </tr>
 </table>
 

@@ -68,7 +68,8 @@ Accumulated impulses from matching contact points are reused through Warm Starti
 
 - Use `std::pmr::monotonic_buffer_resource` to reduce temporary memory-allocation overhead.
 - Use `std::execution` to parallelize work outside the constraint-solving stage.
-- Use `thread_local` and `std::atomic` in multithreaded code to reduce memory-allocation overhead and help ensure safe access to shared memory.
+- Use `thread_local` in multithreaded code to reduce memory-allocation overhead.
+- Use `std::atomic` in multithreaded code to ensure safe access to shared data across threads.
 - For XPBD angular constraints, precompute the target angle as a direction vector. During constraint evaluation, the cross product of the anchor-to-particle vector and the target direction vector is used as the constraint function $C$, avoiding the cost of computing the angle with inverse trigonometric functions.
 - Precompute reciprocals for values repeatedly used as divisors, such as `delta_time`, and use multiplication in subsequent calculations to reduce division operations.
 - Cache the sine and cosine of rigid-body rotation angles.
@@ -77,24 +78,25 @@ Accumulated impulses from matching contact points are reused through Warm Starti
 
 <table>
   <tr>
-    <th>Soft Circle Stress Test</th>
-    <th>Box Stress Test</th>
+    <th colspan="2">Soft Circle Stress Test & Box Stress Test</th>
   </tr>
   <tr>
     <td>
-      <img src="assets/SoftCircleStress.jpg" alt="SoftCircleStress.jpg">
+        <img src="assets/BoxStressWide.jpg" alt="BoxStressWide.jpg">
     </td>
+  </tr>
+  <tr>
     <td>
-      <img src="assets/BoxStress.jpg" alt="BoxStress.jpg">
+        <img src="assets/SoftCircleStressWide.jpg" alt="SoftCircleStressWide.jpg">
     </td>
   </tr>
 </table>
 
-The following table shows the performance results for the **Soft Circle Stress Test** shown in the left image above.
+The following table shows the performance results for the **Soft Circle Stress Test** shown in the image above.
 
 <table>
   <tr>
-    <th colspan="3">Soft Circle Stress Test / CPU: AMD R5 5600</th>
+    <th colspan="3">Soft Circle Stress Test / 68 Soft Circles / 6800 particles / ≈ 165 soft-soft pairs / ≈ 1200 particle-edge contacts / CPU: AMD R5 5600</th>
   </tr>
   <tr>
     <th>Soft-Soft Detection</th>
@@ -103,13 +105,13 @@ The following table shows the performance results for the **Soft Circle Stress T
   </tr>
   <tr>
     <th>Local BVH</th>
-    <th>0.42ms</th>
-    <th>1.20ms</th>
+    <th>≈ 0.75ms</th>
+    <th>≈ 2.90ms</th>
   </tr>
   <tr>
     <th>Brute Force</th>
-    <th>0.76ms</th>
-    <th>3.85ms</th>
+    <th>≈ 1.47ms</th>
+    <th>≈ 8.30ms</th>
   </tr>
 </table>
 
