@@ -3,6 +3,7 @@
 #include "scene_builder.h"
 #include "physics/physics_world.h"
 #include "physics/physics_config.h"
+#include "physics/systems/fluid_system.h"
 
 namespace scenes
 {
@@ -21,6 +22,9 @@ namespace scenes
             
         case PresetScene::kSoftBodyDemo:
             return CreateSoftBodyDemo(world, viewport, settings);
+            
+        case PresetScene::kFluidDemo:
+            return CreateFluidDemo(world, viewport, settings);
             
         case PresetScene::kBoxStressTest:
             CreateBoxStressTest(world, viewport, settings);
@@ -540,6 +544,59 @@ namespace scenes
                 world.CreatePressureSoftCircle( {x, y}, radius, segments, mass, friction, compliance);
             }
         }
+    }
+
+    SceneObjects SceneBuilder::CreateFluidDemo(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings)
+    {
+        SceneObjects objects{};
+
+        const float w = static_cast<float>(viewport.width);
+        const float h = static_cast<float>(viewport.height);
+        constexpr float mpp = physics_config::kMpp;
+        
+        // Ceiling.
+        const Vec2 ceiling_pos{ w / 2.f * mpp, (h + 15.f) * mpp };
+        constexpr float ceiling_half_height = 1.f;
+        const float ceiling_half_width = w / 2.f * mpp;
+        objects.ceiling = world.CreateBox( ceiling_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, ceiling_half_width, ceiling_half_height, settings.boundary_restitution, settings.boundary_friction);
+
+        // Floor.
+        const Vec2 floor_pos{ w / 2.f * mpp, 0.f };
+        objects.floor = world.CreateBox( floor_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, w / 2.f * mpp, 1.f, settings.boundary_restitution, settings.boundary_friction);
+        
+        // Left wall.
+        const Vec2 left_wall_pos{ 10.f * mpp, h / 2.f * mpp };
+        objects.left_wall = world.CreateBox( left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
+
+        // Right wall.
+        const Vec2 right_wall_pos{ (w - 10.f) * mpp, h / 2.f * mpp };
+        objects.right_wall = world.CreateBox( right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
+        
+        // Slope
+        const Vec2 slope_pos{ w * mpp - 5.f, 3.f };
+        world.CreateBox( slope_pos, 0.4f, {0.f, 0.f}, 0.f, 
+            0.f, 5.f, 0.1f, settings.boundary_restitution, settings.boundary_friction);
+        
+        // Fluid Area
+        const Vec2 fluid_pos{left_wall_pos.x + 1.f, floor_pos.y + 1.f};
+        constexpr int fluid_ny{120};
+        constexpr float fluid_cell_size{0.125f};
+        world.CreateFluidRightOpenVortex(fluid_pos, 200, fluid_ny, fluid_cell_size, 1000.f);
+        
+        const Vec2 floating_obstacle_pos{5.f, fluid_pos.y + fluid_ny * 0.5f * fluid_cell_size + fluid_cell_size};
+        objects.floating_wide_box1 = world.CreateBox(floating_obstacle_pos, 0.f,
+            {0.f, 0.f}, settings.floating_angular_velocity,
+            0.f, 1.f, 0.1f, settings.floating_restitution, settings.floating_friction);
+        
+        objects.floating_wide_box2 = world.CreateBox(floating_obstacle_pos, std::numbers::pi / 2.f,
+            {0.f, 0.f}, settings.floating_angular_velocity,
+            0.f, 1.f, 0.1f, settings.floating_restitution, settings.floating_friction);
+        
+        return objects;
     }
 
     void SceneBuilder::CreateRopeStressTest(PhysicsWorld& world, const ViewportSize viewport, const uint16_t rope_count, const uint16_t segments)

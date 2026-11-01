@@ -673,7 +673,9 @@ void PhysicsWorld::Step(const float dt)
     profile_data_.physics_update_ms = Duration(Clock::now() - physics_update_start).count();
     
     // ===== Fluid =====
-    FluidSystem::SimulateFluids(*this, sub_dt, gravity_, 40, 1.9f);
+    const auto start = Clock::now();
+    FluidSystem::SimulateFluids(*this, sub_dt, gravity_, 33, 1.9f);
+    profile_data_.simulate_fluid = Duration(Clock::now() - start).count();
 }
 
 std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const BoxShape& box_shape, const uint32_t i) const

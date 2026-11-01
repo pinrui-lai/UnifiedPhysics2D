@@ -8,6 +8,7 @@
 #include "application.h"
 #include "physics/physics_config.h"
 #include "physics/physics_world.h"
+#include "physics/systems/fluid_system.h"
 
 void Application::CreateInitialBodies(SDL_Window* window, PhysicsWorld& world, scenes::PresetScene preset)
 {
@@ -209,6 +210,36 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         }
     }
     
+    // ==== Fluid ====
+    for (const Fluid& fluid : world.GetFluids())
+    {
+        const int nx = fluid.GetNx();
+        const int ny = fluid.GetNy();
+        const float cell_size = fluid.GetCellSize();
+        const Vec2 fluid_pos = fluid.GetPosition();
+        const Vec2 fluid_pos_end{fluid_pos.x + nx * cell_size, fluid_pos.y + ny * cell_size};
+        const ImVec2 fluid_pos_render{fluid_pos.x * ppm, float_h - fluid_pos.y * ppm};
+        const ImVec2 fluid_pos_end_render{fluid_pos_end.x * ppm, float_h - fluid_pos_end.y * ppm};
+        
+        draw_list->AddRect(fluid_pos_render, fluid_pos_end_render, body_color);
+        
+        const auto& smoke = fluid.GetSmoke();
+        for (int i = 0; i < nx; i++)
+        {
+            float x0 = (fluid_pos.x + static_cast<float>(i) * cell_size) * ppm;
+            float x1 = (fluid_pos.x + static_cast<float>(i + 1) * cell_size) * ppm;
+            for (int j = 0; j < ny; j++)
+            {
+                float y0 = float_h - (fluid_pos.y + static_cast<float>(j) * cell_size) * ppm;
+                float y1 = float_h - (fluid_pos.y + static_cast<float>(j + 1) * cell_size) * ppm;
+                
+                ImColor color(body_color);
+                color.Value.w = smoke[FluidSystem::index(fluid, i, j)];
+                draw_list->AddRectFilled({x0, y0}, {x1, y1}, color);
+            }
+        }
+    }
+    
     // ==== Debug Option ====
     for (const auto& incident_edge : world.debug_incident_edges_)
     {
@@ -321,8 +352,8 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
         ImGui::Text("Solve Sequential Impulse Constraint: %.5f ms", world.profile_data_.solve_si_constraints_ms);
     
         ImGui::Spacing();
-        ImGui::Text("Integrate Rigid Pos: %.5f ms\nUpdate Particle Vel: %.5f ms",
-            world.profile_data_.integrate_rigid_pos, world.profile_data_.update_particle_vel);
+        ImGui::Text("Integrate Rigid Pos: %.5f ms\nUpdate Particle Vel: %.5f ms\nSimulate Fluid: %.5f ms",
+            world.profile_data_.integrate_rigid_pos, world.profile_data_.update_particle_vel, world.profile_data_.simulate_fluid);
         ImGui::Unindent(indent_len);
     }
     
@@ -379,6 +410,11 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
         if (ImGui::Button(" Soft Demo ")){
             world.ClearWorld();
             CreateInitialBodies(window, world, scenes::PresetScene::kSoftBodyDemo);
+        }
+        
+        if (ImGui::Button(" Fluid Demo ")){
+            world.ClearWorld();
+            CreateInitialBodies(window, world, scenes::PresetScene::kFluidDemo);
         }
     
         if (ImGui::Button(" Box Stress Test ")){

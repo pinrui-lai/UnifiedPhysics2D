@@ -29,6 +29,7 @@ namespace scenes
         kBoxPyramid,
         kBoxStack,
         kSoftBodyDemo,
+        kFluidDemo,
         kBoxStressTest,
         kBigPressureCircleStressTest,
         kSmallPressureCircleStressTest,
@@ -65,10 +66,14 @@ namespace scenes
         static SceneObjects CreateBoxPyramid(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings);
         static SceneObjects CreateBoxStack(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings);
         static SceneObjects CreateSoftBodyDemo(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings);
+        
         static void CreateBoxStressTest( PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings,
             float box_half_extent = 0.5f, float gap = 0.02f, float restitution = 0.05f, float friction = 0.6f);
+        
         static void CreatePressureCircleStressTest( PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings, 
             uint16_t segments = 64, float radius = 64.f / 30.f, float mass = 10.0f, float friction = 0.5f, float compliance = 0.00000f, float gap = 0.04f);
+        
+        static SceneObjects CreateFluidDemo(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings);
         
         static void CreateBigPressureCircleStressTest( PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings, 
             uint16_t segments = 100, float radius = 100.f / 35.f, float mass = 25.0f, float friction = 0.5f, float compliance = 0.00000f, float gap = 0.04f)

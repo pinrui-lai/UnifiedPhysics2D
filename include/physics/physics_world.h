@@ -48,6 +48,7 @@ struct PhysicsProfileData {
     
     double integrate_rigid_pos = 0.0;
     double update_particle_vel = 0.0;
+    double simulate_fluid = 0.0;
 
     void Reset() {
         physics_update_ms = 0.0;
@@ -78,6 +79,7 @@ struct PhysicsProfileData {
         
         integrate_rigid_pos = 0.0;
         update_particle_vel = 0.0;
+        simulate_fluid = 0.0;
     }
 };
 
@@ -169,7 +171,7 @@ public:
         return id;
     }
     
-    uint32_t CreateFluidVortex(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density, bool is_horizontal = true, bool is_dir_positive = true)
+    uint32_t CreateFluidRightOpenVortex(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density, bool is_horizontal = true, bool is_dir_positive = true)
     {
         const auto id = CreateFluid(position, inner_nx, inner_ny, cell_size,density);
         FluidSystem::SetupRightOpenVortexScene(fluids_[id], 20.f);
