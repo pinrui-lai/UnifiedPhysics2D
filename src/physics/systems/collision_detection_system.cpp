@@ -117,6 +117,7 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     
     world.profile_data_.build_bvh_ms += Duration(Clock::now() - start).count();
     
+    // Query Rigid & Soft.
     start = Clock::now();
     GenerateContacts(world, world_aabbs, rigid_rigid_candidates, rigid_particle_contacts, soft_soft_contacts);
     world.profile_data_.query_bvh_ms += Duration(Clock::now() - start).count();
@@ -125,6 +126,9 @@ void CollisionDetectionSystem::CheckCollision(PhysicsWorld& world)
     start = Clock::now();
     CollisionBroadPhase::CleanupStaleManifolds(world);
     world.profile_data_.erase_manifold_ms += Duration(Clock::now() - start).count();
+    
+    // Query Fluids.
+    CollisionBroadPhase::QueryFluids(world);
     world.profile_data_.broad_phase_ms = (world.profile_data_.build_bvh_ms + world.profile_data_.query_bvh_ms + world.profile_data_.erase_manifold_ms);
     
     // ===== Narrow-Phase =====

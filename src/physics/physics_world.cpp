@@ -7,6 +7,7 @@
 #include "physics/systems/movement_system.h"
 #include "physics/systems/collision_solver_system.h"
 #include "physics/systems/collision_detection_system.h"
+#include "physics/systems/fluid_system.h"
 #include "physics/systems/xpbd_solver_system.h"
 
 BodyHandle PhysicsWorld::CreateBody(const Vec2& pos, float rotation, const Vec2& velocity, const float angular_velocity, const float mass, const float inertia, float restitution, float friction)
@@ -506,6 +507,7 @@ void PhysicsWorld::Step(const float dt)
         frame_arena_.release();
         rigid_particle_collision_constraints_.clear();
         particle_edge_collision_constraint_soa_view_.Clear();
+        fluid_rigid_pairs_.clear();
         
         ApplyGravity();
         
@@ -669,6 +671,9 @@ void PhysicsWorld::Step(const float dt)
         profile_data_.update_particle_vel += Duration(Clock::now() - start).count();
     }
     profile_data_.physics_update_ms = Duration(Clock::now() - physics_update_start).count();
+    
+    // ===== Fluid =====
+    FluidSystem::SimulateFluids(*this, sub_dt, gravity_, 40, 1.9f);
 }
 
 std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const BoxShape& box_shape, const uint32_t i) const
@@ -722,4 +727,5 @@ void PhysicsWorld::ClearWorld()
     rigid_particle_angular_constraints_.clear();
     rigid_soft_collision_ignore_.clear();
     soft_soft_collision_ignore_.clear();
+    fluids_.clear();
 }

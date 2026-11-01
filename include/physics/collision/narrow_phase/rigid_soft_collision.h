@@ -6,9 +6,7 @@ class PhysicsWorld;
 
 class RigidSoftCollision
 {
-private:
-    static float SdfCircle(const Vec2 p, const float r) { return p.Length() - r; }
-    
+public:
     static float SdfBox(const Vec2 p, const Vec2 b)
     {
         const Vec2 d = { std::abs(p.x) - b.x, std::abs(p.y) - b.y }; // Map the point to the first quadrant.
@@ -22,6 +20,9 @@ private:
 
         return outside_dist + inside_dist;
     }
+    
+private:
+    static float SdfCircle(const Vec2 p, const float r) { return p.Length() - r; }
     
     static Vec2 GetParticleBoxCollisionNormal(Vec2 p, Vec2 b)
     {

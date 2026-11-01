@@ -243,3 +243,51 @@ void CollisionBroadPhase::CleanupStaleManifolds(PhysicsWorld& world)
         }
     }
 }
+
+void CollisionBroadPhase::QueryFluids(PhysicsWorld& world)
+{
+    if (world.bvh_tree_root_index_ == std::numeric_limits<uint32_t>::max()) return;
+    
+    const uint32_t rigid_count = world.positions_.size();
+    
+    for (size_t i = 0; i < world.fluids_.size(); i++)
+    {
+        auto& fluid = world.fluids_[i];
+        const int nx = fluid.GetNx();
+        const int ny = fluid.GetNy();
+        const float cell_size = fluid.GetCellSize();
+        const Vec2 fluid_pos_min = fluid.GetPosition();
+        const Vec2 fluid_pos_max{fluid_pos_min.x + nx * cell_size, fluid_pos_min.y + ny * cell_size};
+        Aabb fluid_aabb{.min_x = fluid_pos_min.x, .min_y = fluid_pos_min.y, .max_x = fluid_pos_max.x, .max_y = fluid_pos_max.y};
+        
+        uint32_t stack[64];
+        uint32_t stack_ptr = 0;
+        stack[stack_ptr++] = world.bvh_tree_root_index_;
+
+        while (stack_ptr > 0) {
+            const uint32_t curr = stack[--stack_ptr];
+            const BvhNode& node = world.bvh_tree_nodes_[curr];
+            
+            if (!Aabb::Overlap(node.aabb, fluid_aabb))  continue;
+            
+            if (node.IsLeaf()) 
+            {
+                // Fluid vs Rigid
+                if (const uint32_t leaf_id = node.leaf_id; leaf_id < rigid_count)
+                {
+                    world.fluid_rigid_pairs_.emplace_back(i, leaf_id);
+                }
+                else
+                {
+                   // Fluid vs Soft
+                }
+            } 
+            else
+            {
+                stack[stack_ptr++] = node.left_child;
+                stack[stack_ptr++] = node.right_child;
+            }
+        }
+    }
+    
+}

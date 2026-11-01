@@ -82,6 +82,7 @@ private:
     }
     
     static void CleanupStaleManifolds(PhysicsWorld& world);
+    static void QueryFluids(PhysicsWorld& world);
     
     friend CollisionDetectionSystem;
     friend SoftSoftCollision;

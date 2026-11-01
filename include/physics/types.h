@@ -4,6 +4,8 @@
 #include <limits>
 #include <vector>
 
+class FluidSystem;
+
 struct Vec2
 {
     float x{0.f};
@@ -318,4 +320,47 @@ struct QueryOutput
         rs.clear();
         ss.clear();
     }
+};
+
+class Fluid
+{
+public:
+    Fluid(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density)
+    : position_(position), nx_(inner_nx + 2), ny_(inner_ny + 2), h_(cell_size), density_(density), u_(CellCount(), 0.0f),
+    v_(CellCount(), 0.0f), new_u_(CellCount(), 0.0f), new_v_(CellCount(), 0.0f), pressure_(CellCount(), 0.0f),
+    solid_(CellCount(), 1.0f), smoke_(CellCount(), 0.0f), new_smoke_(CellCount(), 0.5f) {}
+
+    Vec2 GetPosition() const { return position_; }
+    int GetNx() const { return nx_; }
+    int GetNy() const { return ny_; }
+    float GetCellSize() const { return h_; }
+    const std::vector<float>& GetSmoke() const { return smoke_; }
+    
+private:
+    Vec2 position_;
+    int nx_; // includes two ghost-cell layers
+    int ny_; // includes two ghost-cell layers
+    float h_;
+    float density_;
+    float obstacle_x_ = 0.4f;
+    float obstacle_y_ = 0.5f;
+    float obstacle_radius_ = 0.15f;
+
+    // MAC grid: u is stored on vertical faces, v on horizontal faces;
+    // smoke and pressure are stored at cell centers.
+    std::vector<float> u_;
+    std::vector<float> v_;
+    std::vector<float> new_u_;
+    std::vector<float> new_v_;
+    std::vector<float> pressure_;
+    std::vector<float> solid_; // 1 = fluid, 0 = solid
+    std::vector<float> smoke_;
+    std::vector<float> new_smoke_;
+    
+    [[nodiscard]] std::size_t CellCount() const noexcept
+    {
+        return static_cast<std::size_t>(nx_) * static_cast<std::size_t>(ny_);
+    }
+    
+    friend FluidSystem;
 };
