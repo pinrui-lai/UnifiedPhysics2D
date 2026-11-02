@@ -108,10 +108,9 @@ void SoftSoftCollision::CheckParticleEdgeCollision(const PhysicsWorld& world, co
             const Vec2 diff = particle_pos - proj;
 
             const float dist_sq = diff.LengthSquared();
-            // if (dist_sq > total_thickness_sq || dist_sq < 1e-12f) return;
             if (dist_sq > total_thickness_sq) return;
             
-            Vec2 normal = ab.Normal();
+            Vec2 normal = ab.CcwNormal();
             if (!is_b_closed)
             {
                 if (dist_sq > 1e-8f)
@@ -123,7 +122,7 @@ void SoftSoftCollision::CheckParticleEdgeCollision(const PhysicsWorld& world, co
                     const Vec2 prev_p_pos = world.GetParticlePrevPosition(particle_idx);
                     const Vec2 prev_a_pos = world.GetParticlePrevPosition(fst);
                     const Vec2 prev_b_pos = world.GetParticlePrevPosition(snd);
-                    const float previous_side  = (prev_p_pos - prev_a_pos).Dot((prev_b_pos - prev_a_pos).NormalWithoutNormalized());
+                    const float previous_side  = (prev_p_pos - prev_a_pos).Dot((prev_b_pos - prev_a_pos).PerpCcw());
                     normal = previous_side >= 0 ? normal : -normal; 
                 }
             }

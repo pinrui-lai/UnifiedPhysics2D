@@ -14,7 +14,7 @@ void MovementSystem::IntegrateVelocity(PhysicsWorld& world, const float dt)
     {
         if (world.rigid_bodies_[i].inv_mass == 0.f) return;
         
-        world.velocities_[i].val += (world.forces_[i] * world.rigid_bodies_[i].inv_mass) * dt;
+        world.velocities_[i] += (world.forces_[i] * world.rigid_bodies_[i].inv_mass) * dt;
         world.forces_[i] = {0.f, 0.f};
     });
 }
@@ -28,13 +28,13 @@ void MovementSystem::IntegratePosition(PhysicsWorld& world, const float dt)
     {
         // Split Impulse : use both velocity and  pseudo-velocity to update position.
         // Pseudo Velocities don't use "delta time" to integrate.
-        world.positions_[i].val += world.velocities_[i].val * dt + world.pseudo_velocities_[i].val;
-        world.rotations_[i].val += world.angular_velocities_[i].val * dt + world.pseudo_angular_velocities_[i].val;
-        world.rots_[i].Set(world.rotations_[i].val);
+        world.positions_[i] += world.velocities_[i] * dt + world.pseudo_velocities_[i];
+        world.rotations_[i] += world.angular_velocities_[i] * dt + world.pseudo_angular_velocities_[i];
+        world.rots_[i].Set(world.rotations_[i]);
         
         // Clear pseudo velocity to avoid interfering in the next frame.
-        world.pseudo_velocities_[i].val = {0.f, 0.f};
-        world.pseudo_angular_velocities_[i].val = 0.f;
+        world.pseudo_velocities_[i] = {0.f, 0.f};
+        world.pseudo_angular_velocities_[i] = 0.f;
     });
 }
 

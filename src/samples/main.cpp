@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    SDL_Window* window = SDL_CreateWindow("SDL3 + ImGui Drawing Demo", 1920, 1080, SDL_WINDOW_RESIZABLE);
+    SDL_Window* window = SDL_CreateWindow("Unified Physics 2D", 1920, 1080, SDL_WINDOW_RESIZABLE);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
     if (!window || !renderer) {
         SDL_Log("Window/Renderer Creation Error: %s", SDL_GetError());

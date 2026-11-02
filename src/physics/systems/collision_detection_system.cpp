@@ -34,16 +34,16 @@ void CollisionDetectionSystem::GenerateContacts(PhysicsWorld& world, std::span<c
 
     // The output of each chunk is independent.
     const auto chunks = std::views::iota(uint32_t{0}, chunk_count);
-    std::for_each( std::execution::par_unseq, chunks.begin(), chunks.end(), [&](uint32_t chunk_id)
+    std::for_each(std::execution::par_unseq, chunks.begin(), chunks.end(), [&](uint32_t chunk_id)
     {
         auto& out = query_outputs[chunk_id];
 
         const uint32_t begin = chunk_id * queries_per_chunk;
-        const uint32_t end = begin + std::min( queries_per_chunk, query_count - begin);
+        const uint32_t end = begin + std::min(queries_per_chunk, query_count - begin);
 
         for (uint32_t idx = begin; idx < end; ++idx)
         {
-            CollisionBroadPhase::QueryBvh( world, world_aabbs, idx, out.rr, out.rs, out.ss);
+            CollisionBroadPhase::QueryBvh(world, world_aabbs, idx, out.rr, out.rs, out.ss);
         }
     });
 
@@ -69,9 +69,9 @@ void CollisionDetectionSystem::GenerateContacts(PhysicsWorld& world, std::span<c
     {
         const auto& out = query_outputs[c];
 
-        rigid_rigid_candidates.insert( rigid_rigid_candidates.end(), out.rr.begin(), out.rr.end());
-        rigid_soft_contacts.insert( rigid_soft_contacts.end(), out.rs.begin(), out.rs.end());
-        soft_soft_contacts.insert( soft_soft_contacts.end(), out.ss.begin(), out.ss.end());
+        rigid_rigid_candidates.insert(rigid_rigid_candidates.end(), out.rr.begin(), out.rr.end());
+        rigid_soft_contacts.insert(rigid_soft_contacts.end(), out.rs.begin(), out.rs.end());
+        soft_soft_contacts.insert(soft_soft_contacts.end(), out.ss.begin(), out.ss.end());
     }
     
     // Update world.manifolds_.

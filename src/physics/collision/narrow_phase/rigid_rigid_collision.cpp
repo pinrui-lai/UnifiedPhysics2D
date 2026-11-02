@@ -1,5 +1,4 @@
 #include "physics/collision/narrow_phase/rigid_rigid_collision.h"
-#include "physics/components.h"
 #include "physics/physics_world.h"
 
 namespace 
@@ -10,7 +9,7 @@ Vec2 RigidRigidCollision::GetSupport(const PhysicsWorld& world, const uint32_t i
 {
     const Shape& s = world.shapes_[i];
     return std::visit(Overload{
-        [&](const CircleShape& c){ return world.positions_[i].val + dir.Normalized() * c.radius; },
+        [&](const CircleShape& c){ return world.positions_[i] + dir.Normalized() * c.radius; },
             [&](const BoxShape& b)
                 {
                     // Rotate dir to box's local space (rotate `-world.rotations_[i]` )
@@ -23,7 +22,7 @@ Vec2 RigidRigidCollision::GetSupport(const PhysicsWorld& world, const uint32_t i
                        , std::copysign(b.half_height, local_dir.y)};
                     
                    // Transform local_support to world coordinate (rotate + translate).
-                    return world.rots_[i].Mul(local_support) + world.positions_[i].val;
+                    return world.rots_[i].Mul(local_support) + world.positions_[i];
                 },
         [&](const PolygonShape& p){ return Vec2{0.f, 0.f}; },
     }, s);
@@ -42,7 +41,7 @@ bool RigidRigidCollision::HandleSimplex(FixedSimplex& simplex, Vec2& dir)
         if (dir.LengthSquared() < 1e-6f)
         {
             // If the origin is on AB, use AB's normal as dir.
-            dir = ab.NormalWithoutNormalized();
+            dir = ab.PerpCcw();
         }
     }
     else if (simplex.size() == 3)
@@ -81,8 +80,8 @@ void RigidRigidCollision::Gjk(PhysicsWorld& world, Manifold& manifold)
     const uint32_t index_a = manifold.a;
     const uint32_t index_b = manifold.b;
     
-    const Vec2 position_a = world.positions_[index_a].val;
-    const Vec2 position_b = world.positions_[index_b].val;
+    const Vec2 position_a = world.positions_[index_a];
+    const Vec2 position_b = world.positions_[index_b];
     Vec2 dir = (position_b - position_a).Normalized();
     
     // First support point of simplex.
@@ -170,7 +169,7 @@ std::pair<Vec2, float> RigidRigidCollision::Epa(const PhysicsWorld& world, const
             Vec2 vertex_b = polytope[k];
             
             Vec2 edge = vertex_b - vertex_a;
-            Vec2 normal = edge.Normal();
+            Vec2 normal = edge.CcwNormal();
             
             float distance = vertex_a.Dot(normal);
             if (distance < 1e-6f)
@@ -211,7 +210,7 @@ void RigidRigidCollision::GetMostPerpEdge(const std::span<const Vec2>& vertices,
     {
         const uint32_t j = (i + 1) % vertices.size();
         Vec2 ij = vertices[j] - vertices[i];
-        Vec2 ij_normal = ij.Normal();
+        Vec2 ij_normal = ij.CcwNormal();
         if (const float current_dot = ij_normal.Dot(dir); current_dot > max_dot)
         {
             max_dot = current_dot;
@@ -279,13 +278,13 @@ void RigidRigidCollision::GetCollisionPoints(PhysicsWorld& world, Vec2 collision
         
         if constexpr (std::is_same_v<A, CircleShape> && std::is_same_v<B, CircleShape>)
         {
-            contact1.collision_point_a = world.positions_[index_a].val + collision_normal * a.radius;
-            contact1.collision_point_b = world.positions_[index_b].val - collision_normal * b.radius;
+            contact1.collision_point_a = world.positions_[index_a] + collision_normal * a.radius;
+            contact1.collision_point_b = world.positions_[index_b] - collision_normal * b.radius;
             contact1.id.key = 0;
         }
         else if constexpr (std::is_same_v<A, CircleShape>)
         {
-            contact1.collision_point_a = world.positions_[index_a].val + collision_normal * a.radius;
+            contact1.collision_point_a = world.positions_[index_a] + collision_normal * a.radius;
             contact1.collision_point_b = contact1.collision_point_a - collision_normal * depth;
             contact1.id.features.type_a = 2;
             contact1.id.features.index_a = 0;
@@ -300,7 +299,7 @@ void RigidRigidCollision::GetCollisionPoints(PhysicsWorld& world, Vec2 collision
         }
         else if constexpr (std::is_same_v<B, CircleShape>)
         {
-            contact1.collision_point_b = world.positions_[index_b].val - collision_normal * b.radius;
+            contact1.collision_point_b = world.positions_[index_b] - collision_normal * b.radius;
             contact1.collision_point_a = contact1.collision_point_b + collision_normal * depth;
             contact1.id.features.type_b = 2;
             contact1.id.features.index_b = 0;
@@ -347,7 +346,7 @@ void RigidRigidCollision::GetCollisionPoints(PhysicsWorld& world, Vec2 collision
             const Vec2 ref_b_to_a = ref_edge_pos[0] - ref_edge_pos[1];
             ClipEdge(ref_b_to_a, ref_edge_pos[1], ref_edge_ids[1], clipped_incident_edge, clipping_ref_vertex_ids);
 
-            const Vec2 ref_a_to_b_normal = ref_a_to_b.Normal();
+            const Vec2 ref_a_to_b_normal = ref_a_to_b.CcwNormal();
             
             // Keep point which penetrates reference edge.
             const float clipped_inc_a_dot_normal = (clipped_incident_edge[0] - ref_edge_pos[0]).Dot(ref_a_to_b_normal);

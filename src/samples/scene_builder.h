@@ -67,35 +67,35 @@ namespace scenes
         static SceneObjects CreateBoxStack(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings);
         static SceneObjects CreateSoftBodyDemo(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings);
         
-        static void CreateBoxStressTest( PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings,
+        static void CreateBoxStressTest(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings,
             float box_half_extent = 0.5f, float gap = 0.02f, float restitution = 0.05f, float friction = 0.6f);
         
-        static void CreatePressureCircleStressTest( PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings, 
-            uint16_t segments = 64, float radius = 64.f / 30.f, float mass = 10.0f, float friction = 0.5f, float compliance = 0.00000f, float gap = 0.04f);
+        static void CreatePressureCircleStressTest(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings, 
+            uint16_t segments = 64, float radius = 64.f / 30.f, float mass = 10.f, float friction = 0.5f, float compliance = 0.00000f, float gap = 0.04f);
         
         static SceneObjects CreateFluidDemo(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings);
         
-        static void CreateBigPressureCircleStressTest( PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings, 
-            uint16_t segments = 100, float radius = 100.f / 35.f, float mass = 25.0f, float friction = 0.5f, float compliance = 0.00000f, float gap = 0.04f)
+        static void CreateBigPressureCircleStressTest(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings, 
+            uint16_t segments = 100, float radius = 100.f / 35.f, float mass = 25.f, float friction = 0.5f, float compliance = 0.00000f, float gap = 0.04f)
         {
-            CreatePressureCircleStressTest( world, viewport, settings, segments, radius, mass, friction, compliance, gap);
+            CreatePressureCircleStressTest(world, viewport, settings, segments, radius, mass, friction, compliance, gap);
         }
         
-        static void CreateSmallPressureCircleStressTest( PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings, 
-            uint16_t segments = 32, float radius = 32.f / 25.f, float mass = 15.0f, float friction = 0.5f, float compliance = 0.00000f, float gap = 0.04f)
+        static void CreateSmallPressureCircleStressTest(PhysicsWorld& world, ViewportSize viewport, const SceneSettings& settings, 
+            uint16_t segments = 32, float radius = 32.f / 25.f, float mass = 15.f, float friction = 0.5f, float compliance = 0.00000f, float gap = 0.04f)
         {
-            CreatePressureCircleStressTest( world, viewport, settings, segments, radius, mass, friction, compliance, gap);
+            CreatePressureCircleStressTest(world, viewport, settings, segments, radius, mass, friction, compliance, gap);
         }
         
-        static void CreateRopeStressTest( PhysicsWorld& world, ViewportSize viewport, uint16_t rope_count = 30, uint16_t segments = 101);
+        static void CreateRopeStressTest(PhysicsWorld& world, ViewportSize viewport, uint16_t rope_count = 30, uint16_t segments = 64);
         
         template <typename CreateFn>
-        static auto SpawnFalling( const Vec2& center, const size_t count, const float spread_x, const float height, CreateFn create_fn)
+        static auto SpawnFalling(const Vec2& center, const size_t count, const float spread_x, const float height, CreateFn create_fn)
         {
             thread_local std::mt19937 rng{ std::random_device{}() };
 
-            std::uniform_real_distribution<float> x_dist( -spread_x, spread_x );
-            std::uniform_real_distribution<float> y_dist( 0.0f, height );
+            std::uniform_real_distribution<float> x_dist(-spread_x, spread_x);
+            std::uniform_real_distribution<float> y_dist(0.f, height);
 
             for (size_t i = 0; i < count; ++i)
             {

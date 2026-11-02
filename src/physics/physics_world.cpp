@@ -410,7 +410,7 @@ void PhysicsWorld::CreateCar(const Vec2& pos, float wheel_radius, float wheel_ma
     CreateCircle({pos.x + car_body_width, pos.y}, 0.f, {0.f, 0.f}, 0.f, wheel_mass, wheel_radius, wheel_restitution, wheel_friction);
     
     // Left Suspension
-    Vec2 left_wheel_center_pos = positions_[left_wheel_idx].val;
+    Vec2 left_wheel_center_pos = positions_[left_wheel_idx];
     uint32_t left_suspension_upper_particle_idx = particle_inv_masses_.size();
     const uint32_t left_suspension_lower_particle_idx = particle_inv_masses_.size() + 1;
     const uint32_t left_suspension_handle_idx = soft_body_handles_.size();
@@ -418,7 +418,7 @@ void PhysicsWorld::CreateCar(const Vec2& pos, float wheel_radius, float wheel_ma
         1, suspension_mass, 0.f, suspension_compliance, false, false);
     
     // Right Suspension
-    Vec2 right_wheel_center_pos = positions_[right_wheel_idx].val;
+    Vec2 right_wheel_center_pos = positions_[right_wheel_idx];
     uint32_t right_suspension_upper_particle_idx = particle_inv_masses_.size();
     const uint32_t right_suspension_lower_particle_idx = particle_inv_masses_.size() + 1;
     const uint32_t right_suspension_handle_idx = soft_body_handles_.size();
@@ -450,6 +450,56 @@ void PhysicsWorld::CreateCar(const Vec2& pos, float wheel_radius, float wheel_ma
     rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(right_wheel_idx, right_suspension_handle_idx));
     rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(car_body_idx, left_suspension_handle_idx));
     rigid_soft_collision_ignore_.insert(CollisionBroadPhase::MakePairKey(car_body_idx, right_suspension_handle_idx));
+}
+
+uint32_t PhysicsWorld::CreateFluidRightOpenVortex(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density,
+    const float init_smoke, float inlet_speed)
+{
+    const auto id = CreateFluid(position, inner_nx, inner_ny, cell_size,density, init_smoke);
+    auto& fluid = fluids_[id];
+        
+    // Solid left, bottom and top boundaries; the right side is an outlet.
+    for (int i = 0; i < fluid.nx_; ++i)
+    {
+        for (int j = 0; j < fluid.ny_; ++j)
+        {
+            const bool wall = (i == 0 || j == 0 || j == fluid.ny_ - 1);
+            fluid.solid_[Fluid::index(fluid, i, j)] = wall ? 0.f : 1.f;
+            
+            if (i == 1) 
+            {
+                fluid.u_[Fluid::index(fluid, i, j)] = inlet_speed;
+            }
+        }
+    }
+    
+    // Inlet strip, this is stored in the left ghost column and is carried into the domain by advection.
+    const float pipe_height = 0.15f * static_cast<float>(fluid.ny_);
+    const int min_j = static_cast<int>(std::floor(0.5f * static_cast<float>(fluid.ny_) - 0.5f * pipe_height));
+    const int max_j = static_cast<int>(std::floor(0.5f * static_cast<float>(fluid.ny_) + 0.5f * pipe_height));
+    for (int j = std::max(0, min_j); j < std::min(fluid.ny_, max_j); ++j)
+    {
+        fluid.smoke_[Fluid::index(fluid, 0, j)] = 1.f;
+    }
+    return id;
+}
+
+uint32_t PhysicsWorld::CreateFluidTank(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density,
+    const float init_smoke)
+{
+    const auto id = CreateFluid(position, inner_nx, inner_ny, cell_size,density, init_smoke);
+    auto& fluid = fluids_[id];
+        
+    // Solid left, right, bottom and top boundaries.
+    for (int i = 0; i < fluid.nx_; ++i)
+    {
+        for (int j = 0; j < fluid.ny_; ++j)
+        {
+            const bool wall = (i == 0 || j == 0 || i == fluid.nx_ - 1 || j == fluid.ny_ - 1);
+            fluid.solid_[Fluid::index(fluid, i, j)] = wall ? 0.f : 1.f;
+        }
+    }
+    return id;
 }
 
 void PhysicsWorld::ApplyForce(const BodyHandle handle, const Vec2& force)
@@ -615,48 +665,20 @@ void PhysicsWorld::Step(const float dt)
                 XpbdSolver::SolveParticleEdgeCollisionConstraints(*this, index_range);
             }
             profile_data_.solve_ss_ms += Duration(Clock::now() - solve_ss_start).count();
-            
         }
         profile_data_.solve_xpbd_constraints_ms += Duration(Clock::now() - start).count();
         
         // ===== Solve Sequential Impulse =====
         start = Clock::now();
-        for (auto& manifold : manifolds_)
-        {
-            for (int i = 0; i < manifold.contact_count; ++i)
-            {
-                CollisionSolverSystem::InitializeContact(*this, manifold, i);        
-            }
-        }
-        
-        for (auto& manifold : manifolds_)
-        {
-            for (int i = 0; i < manifold.contact_count; ++i)
-            {
-                CollisionSolverSystem::WarmStartContact(*this, manifold, i);        
-            }
-        }
-        
+        CollisionSolverSystem::InitializeContacts(*this);
+        CollisionSolverSystem::WarmStartContacts(*this);        
         for (int iter = 0; iter < velocity_iterations; ++iter)
         {
-            for (auto& manifold : manifolds_)
-            {
-                for (int i = 0; i < manifold.contact_count; ++i)
-                {
-                    CollisionSolverSystem::SolveVelocityConstraint(*this, manifold, i);        
-                }
-            }
+            CollisionSolverSystem::SolveVelocityConstraints(*this);
         }
-        
         for (int iter = 0; iter < position_iterations; ++iter)
         {
-            for (auto& manifold : manifolds_)
-            {
-                for (int i = 0; i < manifold.contact_count; ++i)
-                {
-                    CollisionSolverSystem::SolvePositionConstraint(*this, manifold, i);      
-                }
-            }
+            CollisionSolverSystem::SolvePositionConstraints(*this);
         }
         profile_data_.solve_si_constraints_ms += Duration(Clock::now() - start).count();
 
@@ -670,30 +692,13 @@ void PhysicsWorld::Step(const float dt)
         XpbdSolver::FinalizeParticles(*this, 1.f/sub_dt);
         profile_data_.update_particle_vel += Duration(Clock::now() - start).count();
     }
-    profile_data_.physics_update_ms = Duration(Clock::now() - physics_update_start).count();
     
     // ===== Fluid =====
     const auto start = Clock::now();
     FluidSystem::SimulateFluids(*this, sub_dt, gravity_, 33, 1.9f);
     profile_data_.simulate_fluid = Duration(Clock::now() - start).count();
-}
-
-std::array<Vec2, 4> PhysicsWorld::GetBodyVertices(const BoxShape& box_shape, const uint32_t i) const
-{
-    // Vertices are arranged in clockwise.
-    std::array<Vec2, 4> vertices = {
-        Vec2{-box_shape.half_width, box_shape.half_height}, Vec2{box_shape.half_width, box_shape.half_height},
-        Vec2{box_shape.half_width, -box_shape.half_height}, Vec2{-box_shape.half_width, -box_shape.half_height}
-    };
     
-    std::ranges::transform(vertices, vertices.begin(), [&](const Vec2 v){ return rots_[i].Mul(v) + positions_[i].val; });
-    
-    return vertices;
-}
-
-std::vector<Vec2> PhysicsWorld::GetBodyVertices(const PolygonShape& polygon_shape, uint32_t i)
-{
-    return std::vector<Vec2>{};
+    profile_data_.physics_update_ms = Duration(Clock::now() - physics_update_start).count();
 }
 
 void PhysicsWorld::ClearWorld()

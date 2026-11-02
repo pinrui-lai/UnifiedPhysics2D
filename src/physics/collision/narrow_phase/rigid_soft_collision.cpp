@@ -1,5 +1,4 @@
 #include "physics/collision/narrow_phase/rigid_soft_collision.h"
-#include "physics/components.h"
 #include "physics/physics_world.h"
 
 namespace 
@@ -17,8 +16,8 @@ void RigidSoftCollision::CheckRigidParticleCollision(PhysicsWorld& world, uint32
             const float s = world.rots_[query_obj_idx].s;
             const float c = world.rots_[query_obj_idx].c;
             
-            Vec2 p_pos_map_to_box = particle_pos - world.positions_[query_obj_idx].val;
-            p_pos_map_to_box = {p_pos_map_to_box.x * c + p_pos_map_to_box.y * s , - p_pos_map_to_box.x * s + p_pos_map_to_box.y * c};
+            Vec2 p_pos_map_to_box = particle_pos - world.positions_[query_obj_idx];
+            p_pos_map_to_box = world.rots_[query_obj_idx].MulT(p_pos_map_to_box);
             const float depth = SdfBox(p_pos_map_to_box, {b.half_width, b.half_height});
             if (depth >= 0.f) return;
             
@@ -31,7 +30,7 @@ void RigidSoftCollision::CheckRigidParticleCollision(PhysicsWorld& world, uint32
         },
         [&](const CircleShape& c)
         {
-            const Vec2 p_pos_map_to_circle = particle_pos - world.positions_[query_obj_idx].val;
+            const Vec2 p_pos_map_to_circle = particle_pos - world.positions_[query_obj_idx];
             const float depth = SdfCircle(p_pos_map_to_circle, c.radius);
             if (depth >= 0.f) return;
             

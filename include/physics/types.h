@@ -2,8 +2,10 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <variant>
 #include <vector>
 
+class PhysicsWorld;
 class FluidSystem;
 
 struct Vec2
@@ -39,10 +41,56 @@ struct Vec2
     
     // Cartesian Coordinate System (The Y-axis direction is upwards as positive).
     // Counter-Clock-Wise when normal.
-    Vec2 Normal() const { return Vec2{-y, x}.Normalized(); }
+    Vec2 CcwNormal() const { return Vec2{-y, x}.Normalized(); }
     
-    constexpr Vec2 NormalWithoutNormalized() const { return {-y, x}; }
+    constexpr Vec2 PerpCcw() const { return {-y, x}; }
 };
+
+struct Rot {
+    float c, s; // c = cos(angle), s = sin(angle)
+    
+    void Set(const float angle) {
+        c = std::cos(angle);
+        s = std::sin(angle);
+    }
+
+    // Rotation
+    Vec2 Mul(const Vec2& v) const {
+        return Vec2(c * v.x - s * v.y, s * v.x + c * v.y);
+    }
+
+    // Reverse Rotation
+    Vec2 MulT(const Vec2& v) const {
+        return Vec2(c * v.x + s * v.y, -s * v.x + c * v.y);
+    }
+};
+
+struct RigidBodyComponent
+{
+    float inv_mass{1.f};
+    float inv_inertia{1.f};
+    float restitution{0.1f};
+    float friction{0.1f};
+};
+
+struct CircleShape
+{
+    float radius;
+};
+
+struct BoxShape
+{
+    float half_width;
+    float half_height;
+};
+
+struct PolygonShape
+{
+    uint16_t vertex_offset;
+    uint32_t vertex_count;
+};
+
+using Shape = std::variant<PolygonShape, BoxShape, CircleShape>;
 
 // If contact point is not clipped, incident index is vertex index, reference index is edge index.
 // If contact point is result after clip, incident index is edge index, reference index is index of "the endpoint on the clip-face side".
@@ -325,10 +373,10 @@ struct QueryOutput
 class Fluid
 {
 public:
-    Fluid(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density)
-    : position_(position), nx_(inner_nx + 2), ny_(inner_ny + 2), h_(cell_size), density_(density), u_(CellCount(), 0.0f),
-    v_(CellCount(), 0.0f), new_u_(CellCount(), 0.0f), new_v_(CellCount(), 0.0f), pressure_(CellCount(), 0.0f),
-    solid_(CellCount(), 1.0f), smoke_(CellCount(), 0.0f), new_smoke_(CellCount(), 0.5f) {}
+    Fluid(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density, const float init_smoke)
+    : position_(position), nx_(inner_nx + 2), ny_(inner_ny + 2), h_(cell_size), density_(density), u_(CellCount(), 0.f),
+    v_(CellCount(), 0.f), new_u_(CellCount(), 0.f), new_v_(CellCount(), 0.f), pressure_(CellCount(), 0.f),
+    solid_(CellCount(), 1.f), smoke_(CellCount(), init_smoke), new_smoke_(CellCount(), init_smoke) {}
 
     Vec2 GetPosition() const { return position_; }
     int GetNx() const { return nx_; }
@@ -336,15 +384,18 @@ public:
     float GetCellSize() const { return h_; }
     const std::vector<float>& GetSmoke() const { return smoke_; }
     
+    [[nodiscard]] static std::size_t index(const Fluid& fluid, const int i, const int j) noexcept
+    {
+        return static_cast<std::size_t>(i) * static_cast<std::size_t>(fluid.ny_)
+             + static_cast<std::size_t>(j);
+    }
+    
 private:
     Vec2 position_;
     int nx_; // includes two ghost-cell layers
     int ny_; // includes two ghost-cell layers
     float h_;
     float density_;
-    float obstacle_x_ = 0.4f;
-    float obstacle_y_ = 0.5f;
-    float obstacle_radius_ = 0.15f;
 
     // MAC grid: u is stored on vertical faces, v on horizontal faces;
     // smoke and pressure are stored at cell centers.
@@ -363,4 +414,5 @@ private:
     }
     
     friend FluidSystem;
+    friend PhysicsWorld;
 };

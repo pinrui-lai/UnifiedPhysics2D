@@ -148,7 +148,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
         std::visit(Overload {
         [&](const CircleShape& c)
         {
-            const ImVec2 center(positions[i].val.x * ppm, float_h - positions[i].val.y * ppm);
+            const ImVec2 center(positions[i].x * ppm, float_h - positions[i].y * ppm);
             const float radius = c.radius * ppm;
             
             draw_list->AddCircle(center, radius, body_color, 0, body_thickness);
@@ -169,8 +169,8 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
             std::array<ImVec2, 4> draw_vertices;
                 for (uint8_t idx = 0; idx < 4; ++idx) {
                     const Vec2 v = local_vertices[idx];
-                    const float wx = (v.x * rots[i].c - v.y * rots[i].s + positions[i].val.x) * ppm;
-                    const float wy = float_h - (v.x * rots[i].s + v.y * rots[i].c + positions[i].val.y) * ppm;
+                    const float wx = (v.x * rots[i].c - v.y * rots[i].s + positions[i].x) * ppm;
+                    const float wy = float_h - (v.x * rots[i].s + v.y * rots[i].c + positions[i].y) * ppm;
                     draw_vertices[idx] = ImVec2(wx, wy);
                 }
 
@@ -234,7 +234,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
                 float y1 = float_h - (fluid_pos.y + static_cast<float>(j + 1) * cell_size) * ppm;
                 
                 ImColor color(body_color);
-                color.Value.w = smoke[FluidSystem::index(fluid, i, j)];
+                color.Value.w = smoke[Fluid::index(fluid, i, j)];
                 draw_list->AddRectFilled({x0, y0}, {x1, y1}, color);
             }
         }
@@ -287,7 +287,7 @@ void Application::Render(SDL_Renderer* renderer, SDL_Window* window, PhysicsWorl
     }
     
     draw_list->AddText(ImGui::GetFont(), 30.f, ImVec2(static_cast<float>(w) * 0.4f, float_h * 0.05f), IM_COL32(255, 255, 255, 255),
-        "Arrow Key to apply force to all bodies\nLeft/Right Mouse to spawn body" );
+        "Arrow Key to apply force to all bodies\nLeft/Right Mouse to spawn body");
     
     RenderPhysicsControlPanel(window, world, w);
     
@@ -393,8 +393,19 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
             world.ClearWorld();
             CreateInitialBodies(window, world, scenes::PresetScene::kDefaultDemo);
         }
-    
+        
         ImGui::SameLine();
+        if (ImGui::Button(" Soft Demo ")){
+            world.ClearWorld();
+            CreateInitialBodies(window, world, scenes::PresetScene::kSoftBodyDemo);
+        }
+        
+        ImGui::SameLine();
+        if (ImGui::Button(" Fluid Demo ")){
+            world.ClearWorld();
+            CreateInitialBodies(window, world, scenes::PresetScene::kFluidDemo);
+        }
+        
         if (ImGui::Button(" Box Pyramid ")){
             world.ClearWorld();
             CreateInitialBodies(window, world, scenes::PresetScene::kBoxPyramid);
@@ -405,18 +416,13 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
             world.ClearWorld();
             CreateInitialBodies(window, world, scenes::PresetScene::kBoxStack);
         }
-    
+        
         ImGui::SameLine();
-        if (ImGui::Button(" Soft Demo ")){
+        if (ImGui::Button(" Empty ")){
             world.ClearWorld();
-            CreateInitialBodies(window, world, scenes::PresetScene::kSoftBodyDemo);
+            CreateInitialBodies(window, world, scenes::PresetScene::kEmpty);
         }
         
-        if (ImGui::Button(" Fluid Demo ")){
-            world.ClearWorld();
-            CreateInitialBodies(window, world, scenes::PresetScene::kFluidDemo);
-        }
-    
         if (ImGui::Button(" Box Stress Test ")){
             world.ClearWorld();
             CreateInitialBodies(window, world, scenes::PresetScene::kBoxStressTest);
@@ -426,12 +432,6 @@ void Application::RenderPhysicsControlPanel(SDL_Window* window, PhysicsWorld& wo
         if (ImGui::Button(" Rope Stress Test ")){
             world.ClearWorld();
             CreateInitialBodies(window, world, scenes::PresetScene::kRopeStressTest);
-        }
-    
-        ImGui::SameLine();
-        if (ImGui::Button(" Empty ")){
-            world.ClearWorld();
-            CreateInitialBodies(window, world, scenes::PresetScene::kEmpty);
         }
     
         if (ImGui::Button(" Big Pressure Circle Stress Test ")){
@@ -565,7 +565,7 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
             spawn_pos, 0.f, {0.f, 0.f}, 0.f,
             circle_spawn_mass_, circle_spawn_radius_,
             circle_spawn_restitution_, circle_spawn_friction_
-        );
+       );
         break;
 
     case SpawnType::kRigidBox:
@@ -573,7 +573,7 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
             spawn_pos, 0.f, {0.f, 0.f}, 0.f,
             box_spawn_mass_, box_spawn_half_width_, box_spawn_half_height_,
             box_spawn_restitution_, box_spawn_friction_
-        );
+       );
         break;
 
     case SpawnType::kSoftRope:
@@ -588,21 +588,21 @@ void Application::SpawnBodyAt(PhysicsWorld& world, const SpawnType type, const V
             spawn_pos, soft_box_spawn_width_, soft_box_spawn_height_,
             static_cast<uint16_t>(soft_box_spawn_nx_), static_cast<uint16_t>(soft_box_spawn_ny_),
             soft_box_spawn_mass_, soft_box_spawn_friction_, soft_box_spawn_compliance_
-        );
+       );
         break;
 
     case SpawnType::kSoftCircleArea:
         world.CreateSoftCircle(
             spawn_pos, soft_circle_spawn_radius_, static_cast<uint16_t>(soft_circle_spawn_num_segments_),
             soft_circle_spawn_mass_, soft_circle_spawn_friction_, soft_circle_spawn_compliance_
-        );
+       );
         break;
 
     case SpawnType::kSoftCirclePressure:
         world.CreatePressureSoftCircle(
             spawn_pos, pressure_circle_spawn_radius_, static_cast<uint16_t>(pressure_circle_spawn_num_segments_),
             pressure_circle_spawn_mass_, pressure_circle_spawn_friction_, pressure_circle_spawn_compliance_
-        );
+       );
         break;
         
     case SpawnType::kCar:
@@ -793,7 +793,7 @@ void Application::RenderBvhDebug(std::span<const BvhNode> nodes, const int root_
             ImVec2(target.aabb.min_x * ppm, window_height - target.aabb.min_y * ppm),
             ImVec2(target.aabb.max_x * ppm, window_height - target.aabb.max_y * ppm),
             IM_COL32(255, 255, 0, 255), 0.f, 0, 3.f
-        );
+       );
 
         // Connect red line to the Left Child and mark it with a red dot.
         if (target.left_child != std::numeric_limits<uint32_t>::max()) {

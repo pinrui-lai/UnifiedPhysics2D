@@ -78,10 +78,10 @@ namespace scenes
         // Floating obstacle bodies.
         const Vec2 floating_circle_pos{(w - 700.f) * mpp, (h / 2.f) * mpp};
 
-        objects.floating_circle = world.CreateCircle( floating_circle_pos, 0.f, {0.f, 0.f}, settings.floating_angular_velocity, 
+        objects.floating_circle = world.CreateCircle(floating_circle_pos, 0.f, {0.f, 0.f}, settings.floating_angular_velocity, 
             0.f, 1.75f, settings.floating_restitution, settings.floating_friction);
 
-        objects.floating_circle2 = world.CreateCircle( {floating_circle_pos.x + 2.5f, floating_circle_pos.y}, 
+        objects.floating_circle2 = world.CreateCircle({floating_circle_pos.x + 2.5f, floating_circle_pos.y}, 
             0.f, {0.f, 0.f}, settings.floating_angular_velocity, 
             0.f, 1.75f, settings.floating_restitution, settings.floating_friction);
         
@@ -100,12 +100,12 @@ namespace scenes
         const Vec2 ceiling_pos{ w / 2.f * mpp, (h + 15.f) * mpp };
         constexpr float ceiling_half_height = 1.f;
         const float ceiling_half_width = w / 2.f * mpp;
-        objects.ceiling = world.CreateBox( ceiling_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.ceiling = world.CreateBox(ceiling_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, ceiling_half_width, ceiling_half_height, settings.boundary_restitution, settings.boundary_friction);
 
         // Floor.
         const Vec2 floor_pos{ w / 2.f * mpp, 0.f };
-        objects.floor = world.CreateBox( floor_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.floor = world.CreateBox(floor_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, w / 2.f * mpp, 1.f, settings.boundary_restitution, settings.boundary_friction);
         
         const float floor_top = floor_pos.y + 1.f;
@@ -113,7 +113,7 @@ namespace scenes
         
         // Slope
         const Vec2 slope_pos{ w * mpp - 5.f, 3.f };
-        world.CreateBox( slope_pos, 0.4f, {0.f, 0.f}, 0.f, 
+        world.CreateBox(slope_pos, 0.4f, {0.f, 0.f}, 0.f, 
             0.f, 5.f, 0.1f, settings.boundary_restitution, settings.boundary_friction);
         
         // Car on slope
@@ -123,12 +123,12 @@ namespace scenes
         
         // Left wall.
         const Vec2 left_wall_pos{ 10.f * mpp, h / 2.f * mpp };
-        objects.left_wall = world.CreateBox( left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.left_wall = world.CreateBox(left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
 
         // Right wall.
         const Vec2 right_wall_pos{ (w - 10.f) * mpp, h / 2.f * mpp };
-        objects.right_wall = world.CreateBox( right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.right_wall = world.CreateBox(right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
         
         // XPBD soft rope.
@@ -139,14 +139,14 @@ namespace scenes
         world.CreateRope(rope_start_pos, rope_end_pos, 64,  20, 0.5f, 0.00001f, true, true);
         
         // Falling bodies on rope.
-        SpawnFalling( {rope_start_pos.x + 7.f, rope_start_pos.y + 2.f}, 5, 1.0f, 0.0f, [&](const Vec2& pos)
+        SpawnFalling({rope_start_pos.x + 7.f, rope_start_pos.y + 2.f}, 5, 1.f, 0.f, [&](const Vec2& pos)
         {
-            return world.CreateCircle( pos, 0.0f, Vec2{0.0f, 0.0f}, 0.0f, 0.5f, 0.5f, 0.1f, 0.1f );
+            return world.CreateCircle(pos, 0.f, Vec2{0.f, 0.f}, 0.f, 0.5f, 0.5f, 0.1f, 0.1f);
         });
         
-        SpawnFalling( {rope_start_pos.x + 7.f, rope_start_pos.y + 2.f}, 5, 1.0f, 0.0f, [&](const Vec2& pos)
+        SpawnFalling({rope_start_pos.x + 7.f, rope_start_pos.y + 2.f}, 5, 1.f, 0.f, [&](const Vec2& pos)
         {
-            return world.CreateBox(pos, 0.0f, Vec2{0.0f, 0.0f}, 0.f, 0.5f, 0.5f, 0.5f, 0.1f, 0.1f);
+            return world.CreateBox(pos, 0.f, Vec2{0.f, 0.f}, 0.f, 0.5f, 0.5f, 0.5f, 0.1f, 0.1f);
         });
         
         world.CreatePressureSoftCircle({rope_start_pos.x + 1.f, floating_circle_pos.y + 3.f}, 1.4f, 40, 3.f, 0.4f, 0.f);
@@ -158,7 +158,7 @@ namespace scenes
         constexpr uint16_t res_y = 11;
 
         const Vec2 cloth_center{ ceiling_pos.x * 0.25f, ceiling_pos.y - ceiling_half_height - cloth_height * 0.5f };
-        const SoftBodyHandle cloth = world.CreateSoftBox( cloth_center, cloth_width, cloth_height,
+        const SoftBodyHandle cloth = world.CreateSoftBox(cloth_center, cloth_width, cloth_height,
             res_x, res_y, 15.f, 0.5f, 0.001f, 0.01f);
 
         // Connect each particle on top of the cloth to the ceiling.
@@ -166,7 +166,7 @@ namespace scenes
         {
             const uint32_t particle_index = cloth.start_particle_idx + x;
             const Vec2 particle_pos = world.GetParticlePosition(particle_index);
-            world.AddRigidParticleJointConstraint( particle_index, objects.ceiling.id, {particle_pos.x - ceiling_pos.x, -ceiling_half_height});
+            world.AddRigidParticleJointConstraint(particle_index, objects.ceiling.id, {particle_pos.x - ceiling_pos.x, -ceiling_half_height});
         }
         
         // Hanging Box
@@ -199,27 +199,27 @@ namespace scenes
         const Vec2 ceiling_pos{ w / 2.f * mpp, (h + 15.f) * mpp };
         constexpr float ceiling_half_height = 1.f;
         const float ceiling_half_width = w / 2.f * mpp;
-        objects.ceiling = world.CreateBox( ceiling_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.ceiling = world.CreateBox(ceiling_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, ceiling_half_width, ceiling_half_height, settings.boundary_restitution, settings.boundary_friction);
 
         // Floor.
         const Vec2 floor_pos{ w / 2.f * mpp, 0.f };
-        objects.floor = world.CreateBox( floor_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.floor = world.CreateBox(floor_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, w / 2.f * mpp, 1.f, settings.boundary_restitution, settings.boundary_friction);
         
         // Left wall.
         const Vec2 left_wall_pos{ 10.f * mpp, h / 2.f * mpp };
-        objects.left_wall = world.CreateBox( left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.left_wall = world.CreateBox(left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
 
         // Right wall.
         const Vec2 right_wall_pos{ (w - 10.f) * mpp, h / 2.f * mpp };
-        objects.right_wall = world.CreateBox( right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.right_wall = world.CreateBox(right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
         
         // Slope
         const Vec2 slope_pos{ w * mpp - 5.f, 3.f };
-        world.CreateBox( slope_pos, 0.4f, {0.f, 0.f}, 0.f, 
+        world.CreateBox(slope_pos, 0.4f, {0.f, 0.f}, 0.f, 
             0.f, 5.f, 0.1f, settings.boundary_restitution, settings.boundary_friction);
         
         return objects;
@@ -234,28 +234,28 @@ namespace scenes
         
         const float floor_half_width = w * mpp * 0.5f;
         constexpr float floor_half_height = 0.5f;
-        constexpr float floor_y = 1.0f;
+        constexpr float floor_y = 1.f;
 
         const Vec2 floor_pos{ (static_cast<float>(w) * 0.5f) * mpp, floor_y };
 
         // Floor
-        objects.floor = world.CreateBox(floor_pos, 0.0f, {0.0f, 0.0f}, 0.0f, 
-            0.0f, floor_half_width, floor_half_height, 0.0f, 0.8f);
+        objects.floor = world.CreateBox(floor_pos, 0.f, {0.f, 0.f}, 0.f, 
+            0.f, floor_half_width, floor_half_height, 0.f, 0.8f);
 
         // Pyramid parameters
         constexpr int box_count_per_base = 12;
         constexpr float box_half_width = 0.7f;
         constexpr float box_half_height = 0.7f;
-        constexpr float box_mass = 2.0f;
-        constexpr float box_restitution = 0.0f;
-        constexpr float box_friction = 1.0f;
+        constexpr float box_mass = 2.f;
+        constexpr float box_restitution = 0.f;
+        constexpr float box_friction = 1.f;
         
         // Initial spacing between 2 boxes
         constexpr float horizontal_spacing = 0.005f;
         constexpr float vertical_spacing = 0.00005f;
 
-        constexpr float box_width = 2.0f * box_half_width;
-        constexpr float box_height = 2.0f * box_half_height;
+        constexpr float box_width = 2.f * box_half_width;
+        constexpr float box_height = 2.f * box_half_height;
 
         // Floor top surface y pos
         constexpr float floor_top = floor_y + floor_half_height;
@@ -281,8 +281,8 @@ namespace scenes
             {
                 const float x = start_x + col * (box_width + horizontal_spacing);
 
-                world.CreateBox({x, y}, 0.0f, {0.0f, 0.0f},   0.0f, 
-                    box_mass, box_half_width, box_half_height, box_restitution, box_friction );
+                world.CreateBox({x, y}, 0.f, {0.f, 0.f},   0.f, 
+                    box_mass, box_half_width, box_half_height, box_restitution, box_friction);
             }
         }
         
@@ -308,7 +308,7 @@ namespace scenes
         constexpr float box_friction = 0.8f;
         
         // Floor
-        objects.floor = world.CreateBox( {center_x, 0.f}, 0.f, {0.f, 0.f}, 0.f, 
+        objects.floor = world.CreateBox({center_x, 0.f}, 0.f, {0.f, 0.f}, 0.f, 
             0.f, world_width * 0.5f, floor_half_height, settings.boundary_restitution, settings.boundary_friction);
         
         // Outer left:
@@ -342,7 +342,7 @@ namespace scenes
 
         const Vec2 beam_position{ center_x, support_top + beam_half_height };
 
-        world.CreateBox( beam_position, 0.f, {0.f, 0.f}, 0.f,
+        world.CreateBox(beam_position, 0.f, {0.f, 0.f}, 0.f,
             box_mass, beam_half_width, beam_half_height, box_restitution, box_friction);
 
         return objects;
@@ -363,7 +363,7 @@ namespace scenes
 
         const uint32_t beam_index = world.GetPositions().size();
 
-        world.CreateBox( beam_center, 0.f, {0.f, 0.f}, 0.f, 0.f,
+        world.CreateBox(beam_center, 0.f, {0.f, 0.f}, 0.f, 0.f,
             beam_half_width, beam_half_height, settings.boundary_restitution, settings.boundary_friction);
 
         // Hanging cloth
@@ -374,7 +374,7 @@ namespace scenes
 
         const Vec2 cloth_center{ beam_center.x, beam_center.y - beam_half_height - cloth_height * 0.5f };
 
-        const SoftBodyHandle cloth = world.CreateSoftBox( cloth_center, cloth_width, cloth_height,
+        const SoftBodyHandle cloth = world.CreateSoftBox(cloth_center, cloth_width, cloth_height,
             res_x, res_y, 4.f, 0.5f, 0.001f, 0.01f);
         
         // Connect each particle on top of the cloth to the ceiling.
@@ -384,22 +384,22 @@ namespace scenes
             const float local_x = -cloth_width * 0.5f + cloth_width * t;
             
             const uint32_t particle_index = cloth.start_particle_idx + x;
-            world.AddRigidParticleJointConstraint( particle_index, beam_index, {local_x, -beam_half_height});
+            world.AddRigidParticleJointConstraint(particle_index, beam_index, {local_x, -beam_half_height});
         }
         
         // Floor.
         const Vec2 floor_pos{ world_w / 2.f, 0.f };
-        objects.floor = world.CreateBox( floor_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.floor = world.CreateBox(floor_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, world_w / 2.f, 1.f, settings.boundary_restitution, settings.boundary_friction);
 
         // Left wall.
         const Vec2 left_wall_pos{ 0.f, world_h / 2.f };
-        objects.left_wall = world.CreateBox( left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.left_wall = world.CreateBox(left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, 1.f, world_h / 2.f, settings.boundary_restitution, settings.boundary_friction);
 
         // Right wall.
         const Vec2 right_wall_pos{ (world_w), world_h / 2.f };
-        objects.right_wall = world.CreateBox( right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.right_wall = world.CreateBox(right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
            0.f, 1.f, world_h / 2.f, settings.boundary_restitution, settings.boundary_friction);
         
         const Vec2 rope_start_pos{ world_w * 0.1f, 7.f };
@@ -408,14 +408,14 @@ namespace scenes
         world.CreateRope(rope_start_pos, rope_end_pos, 101, 50.f, 0.5f, 0.f, true, true);
         
         
-        const Vec2 pressure_circle_pos{ world_w * 0.2f, 9.f };
-        world.CreatePressureSoftCircle( pressure_circle_pos, 2.f, 40, 10.f, 0.5f, 0.f);
+        const Vec2 pressure_circle_pos{ world_w * 0.2f, 10.f };
+        world.CreatePressureSoftCircle(pressure_circle_pos, 2.f, 40, 10.f, 0.5f, 0.f);
         
-        const Vec2 triangle_area_circle_pos{ world_w * 0.4f, 9.f };
-        world.CreateSoftCircle( triangle_area_circle_pos, 2.f, 40, 10.f, 0.5f, 0.f);
+        const Vec2 triangle_area_circle_pos{ world_w * 0.4f, 10.f };
+        world.CreateSoftCircle(triangle_area_circle_pos, 2.f, 40, 10.f, 0.5f, 0.f);
         
-        const Vec2 soft_box_pos{ world_w * 0.6f, 9.f };
-        world.CreateSoftBox( soft_box_pos, 3.f, 3.f,
+        const Vec2 soft_box_pos{ world_w * 0.6f, 10.f };
+        world.CreateSoftBox(soft_box_pos, 3.f, 3.f,
             8, 8, 4.f, 0.5f, 0.001f, 0.000005f);
         
         return objects;
@@ -423,9 +423,9 @@ namespace scenes
 
     namespace
     {
-        constexpr float kWallHalfThickness = 1.0f;
-        constexpr float kFloorHalfHeight = 1.0f;
-        constexpr float kWallMarginPixels = 10.0f;
+        constexpr float kWallHalfThickness = 1.f;
+        constexpr float kFloorHalfHeight = 1.f;
+        constexpr float kWallMarginPixels = 10.f;
 
         struct StressTestBounds
         {
@@ -441,12 +441,12 @@ namespace scenes
         // Return the number of objects that match the available space.
         int FitCount(const float available, const float item_size, const float gap)
         {
-            if (available < item_size || item_size <= 0.0f || gap < 0.0f) return 0;
+            if (available < item_size || item_size <= 0.f || gap < 0.f) return 0;
             
-            return static_cast<int>( std::floor( (available + gap) / (item_size + gap)));
+            return static_cast<int>(std::floor((available + gap) / (item_size + gap)));
         }
 
-        StressTestBounds CreateStressTestBounds( PhysicsWorld& world, const ViewportSize viewport, const SceneSettings& settings)
+        StressTestBounds CreateStressTestBounds(PhysicsWorld& world, const ViewportSize viewport, const SceneSettings& settings)
         {
             constexpr float mpp = physics_config::kMpp;
             const float width = static_cast<float>(viewport.width) * mpp;
@@ -455,15 +455,15 @@ namespace scenes
             const float right_wall_x = (static_cast<float>(viewport.width) - kWallMarginPixels) * mpp;
 
             // Floor
-            world.CreateBox( {width * 0.5f, 0.0f}, 0.0f, {0.0f, 0.0f}, 0.0f,
-                0.0f, width * 0.5f + kWallHalfThickness, kFloorHalfHeight, settings.boundary_restitution, settings.boundary_friction);
+            world.CreateBox({width * 0.5f, 0.f}, 0.f, {0.f, 0.f}, 0.f,
+                0.f, width * 0.5f + kWallHalfThickness, kFloorHalfHeight, settings.boundary_restitution, settings.boundary_friction);
 
             // Left Wall
-            world.CreateBox( {left_wall_x, height * 0.5f}, 0.0f, {0.0f, 0.0f}, 0.0f,
-                0.0f, kWallHalfThickness, height * 0.5f + kFloorHalfHeight, settings.boundary_restitution, settings.boundary_friction);
+            world.CreateBox({left_wall_x, height * 0.5f}, 0.f, {0.f, 0.f}, 0.f,
+                0.f, kWallHalfThickness, height * 0.5f + kFloorHalfHeight, settings.boundary_restitution, settings.boundary_friction);
 
             // Right Wall
-            world.CreateBox( {right_wall_x, height * 0.5f}, 0.0f, {0.0f, 0.0f}, 0.0f, 0.0f,
+            world.CreateBox({right_wall_x, height * 0.5f}, 0.f, {0.f, 0.f}, 0.f, 0.f,
                 kWallHalfThickness, height * 0.5f + kFloorHalfHeight, settings.boundary_restitution, settings.boundary_friction);
 
             return { width, height, left_wall_x + kWallHalfThickness, right_wall_x - kWallHalfThickness, kFloorHalfHeight };
@@ -473,15 +473,15 @@ namespace scenes
     void SceneBuilder::CreateBoxStressTest(PhysicsWorld& world, const ViewportSize viewport, const SceneSettings& settings, const float box_half_extent, const float gap,
         const float restitution, const float friction)
     {
-        if (box_half_extent <= 0.0f || gap < 0.0f) return;
+        if (box_half_extent <= 0.f || gap < 0.f) return;
         
         const StressTestBounds bounds = CreateStressTestBounds(world, viewport, settings);
 
-        const float box_size = box_half_extent * 2.0f;
+        const float box_size = box_half_extent * 2.f;
         const float spacing = box_size + gap;
         
-        const float available_width = bounds.right_inner_x - bounds.left_inner_x - 2.0f * gap;
-        const float available_height = bounds.world_height - bounds.floor_top - 2.0f * gap;
+        const float available_width = bounds.right_inner_x - bounds.left_inner_x - 2.f * gap;
+        const float available_height = bounds.world_height - bounds.floor_top - 2.f * gap;
 
         const int columns = FitCount(available_width, box_size, gap);
         const int rows = FitCount(available_height, box_size, gap);
@@ -503,7 +503,7 @@ namespace scenes
             {
                 const float x = first_x + static_cast<float>(col) * spacing;
 
-                world.CreateBox( {x, y}, 0.0f, {0.0f, 0.0f},  0.0f,  1.0f,
+                world.CreateBox({x, y}, 0.f, {0.f, 0.f},  0.f,  1.f,
                     box_half_extent, box_half_extent, restitution, friction);
             }
         }
@@ -512,15 +512,15 @@ namespace scenes
     void SceneBuilder::CreatePressureCircleStressTest(PhysicsWorld& world, const ViewportSize viewport, const SceneSettings& settings, const uint16_t segments,
         const float radius, const float mass, const float friction, const float compliance, const float gap)
     {
-        if (segments < 3 || radius <= 0.0f || mass <= 0.0f || gap < 0.0f) return;
+        if (segments < 3 || radius <= 0.f || mass <= 0.f || gap < 0.f) return;
         
         const StressTestBounds bounds = CreateStressTestBounds(world, viewport, settings);
 
-        const float circle_diameter = radius * 2.0f;
+        const float circle_diameter = radius * 2.f;
         const float spacing = circle_diameter + gap;
         
-        const float available_width = bounds.right_inner_x - bounds.left_inner_x - 2.0f * gap;
-        const float available_height = bounds.world_height - bounds.floor_top - 2.0f * gap;
+        const float available_width = bounds.right_inner_x - bounds.left_inner_x - 2.f * gap;
+        const float available_height = bounds.world_height - bounds.floor_top - 2.f * gap;
 
         const int columns = FitCount(available_width, circle_diameter, gap);
         const int rows = FitCount(available_height, circle_diameter, gap);
@@ -541,7 +541,7 @@ namespace scenes
             for (int col = 0; col < columns; ++col)
             {
                 const float x = first_x + static_cast<float>(col) * spacing;
-                world.CreatePressureSoftCircle( {x, y}, radius, segments, mass, friction, compliance);
+                world.CreatePressureSoftCircle({x, y}, radius, segments, mass, friction, compliance);
             }
         }
     }
@@ -558,34 +558,29 @@ namespace scenes
         const Vec2 ceiling_pos{ w / 2.f * mpp, (h + 15.f) * mpp };
         constexpr float ceiling_half_height = 1.f;
         const float ceiling_half_width = w / 2.f * mpp;
-        objects.ceiling = world.CreateBox( ceiling_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.ceiling = world.CreateBox(ceiling_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, ceiling_half_width, ceiling_half_height, settings.boundary_restitution, settings.boundary_friction);
 
         // Floor.
         const Vec2 floor_pos{ w / 2.f * mpp, 0.f };
-        objects.floor = world.CreateBox( floor_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.floor = world.CreateBox(floor_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, w / 2.f * mpp, 1.f, settings.boundary_restitution, settings.boundary_friction);
         
         // Left wall.
         const Vec2 left_wall_pos{ 10.f * mpp, h / 2.f * mpp };
-        objects.left_wall = world.CreateBox( left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.left_wall = world.CreateBox(left_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
 
         // Right wall.
         const Vec2 right_wall_pos{ (w - 10.f) * mpp, h / 2.f * mpp };
-        objects.right_wall = world.CreateBox( right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
+        objects.right_wall = world.CreateBox(right_wall_pos, 0.f, {0.f, 0.f}, 0.f, 
             0.f, 1.f, h / 2.f * mpp, settings.boundary_restitution, settings.boundary_friction);
-        
-        // Slope
-        const Vec2 slope_pos{ w * mpp - 5.f, 3.f };
-        world.CreateBox( slope_pos, 0.4f, {0.f, 0.f}, 0.f, 
-            0.f, 5.f, 0.1f, settings.boundary_restitution, settings.boundary_friction);
-        
+
         // Fluid Area
         const Vec2 fluid_pos{left_wall_pos.x + 1.f, floor_pos.y + 1.f};
-        constexpr int fluid_ny{120};
-        constexpr float fluid_cell_size{0.125f};
-        world.CreateFluidRightOpenVortex(fluid_pos, 200, fluid_ny, fluid_cell_size, 1000.f);
+        constexpr int fluid_ny{60};
+        constexpr float fluid_cell_size{0.15f};
+        world.CreateFluidRightOpenVortex(fluid_pos, 150, fluid_ny, fluid_cell_size, 1000.f, 0.f, 20.f);
         
         const Vec2 floating_obstacle_pos{5.f, fluid_pos.y + fluid_ny * 0.5f * fluid_cell_size + fluid_cell_size};
         objects.floating_wide_box1 = world.CreateBox(floating_obstacle_pos, 0.f,
@@ -606,10 +601,10 @@ namespace scenes
         const float world_h = static_cast<float>(viewport.height) * physics_config::kMpp;
 
         constexpr float margin = 1.f;
-        constexpr float rope_length = 15.f;
+        constexpr float rope_length = 18.f;
 
         const float usable_width = world_w - margin * 2.f;
-        const float top_y = world_h * 0.82f;
+        const float top_y = world_h * 0.9f;
         const float bottom_y = top_y - rope_length;
 
         for (uint16_t i = 0; i < rope_count; ++i)
@@ -621,7 +616,7 @@ namespace scenes
             const Vec2 start{x, top_y};
             const Vec2 end{x, bottom_y};
 
-            world.CreateRope( start, end, segments, 1.f, 0.5f, 0.00001f, true, false);
+            world.CreateRope(start, end, segments, 15.f, 0.5f, 0.00001f, true, false);
         }
     }
 }

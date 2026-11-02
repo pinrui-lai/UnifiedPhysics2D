@@ -20,14 +20,14 @@ void CollisionBroadPhase::BuildGlobalBvh(PhysicsWorld& world, std::span<Aabb> wo
             
             if constexpr (std::is_same_v<S, CircleShape>)
             {
-                const Vec2 pos = world.positions_[i].val;
+                const Vec2 pos = world.positions_[i];
                 auto [local_min_x, local_min_y, local_max_x, local_max_y] = world.local_aabbs_[i];
                 world_space_aabbs[i] = {local_min_x + pos.x, local_min_y + pos.y,
                     local_max_x + pos.x, local_max_y + pos.y};
             }
             else
             {
-                world_space_aabbs[i] = ComputeFastAabbFromLocalAabb(world.positions_[i].val, world.rots_[i], world.local_aabbs_[i]);
+                world_space_aabbs[i] = ComputeFastAabbFromLocalAabb(world.positions_[i], world.rots_[i], world.local_aabbs_[i]);
             }
         }, world.shapes_[i]);
     });
@@ -70,7 +70,7 @@ void CollisionBroadPhase::BuildGlobalBvh(PhysicsWorld& world, std::span<Aabb> wo
     index_range = std::views::iota(uint32_t{0}, rigid_count);
     std::for_each(std::execution::par_unseq, index_range.begin(), index_range.end(), [&](const uint32_t i)
     {
-        items[i] = {i, GetMortonCode(world.positions_[i].val, scene_aabb.min_x, scene_aabb.min_y, inv_scene_aabb_width, inv_scene_aabb_height)};
+        items[i] = {i, GetMortonCode(world.positions_[i], scene_aabb.min_x, scene_aabb.min_y, inv_scene_aabb_width, inv_scene_aabb_height)};
     });
 
     index_range = std::views::iota(uint32_t{0}, soft_count);
@@ -213,7 +213,7 @@ Aabb CollisionBroadPhase::ComputeFastAabbFromLocalAabb(const Vec2& pos, const Ro
 
 void CollisionBroadPhase::CleanupStaleManifolds(PhysicsWorld& world)
 {
-    for (size_t i = 0; i < world.manifolds_.size(); ) 
+    for (size_t i = 0; i < world.manifolds_.size();) 
     {
         if (auto& manifold = world.manifolds_[i]; !manifold.is_overlapping) 
         {

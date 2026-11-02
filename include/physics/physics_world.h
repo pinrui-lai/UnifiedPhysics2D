@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <memory_resource>
 #include <ranges>
 #include <span>
@@ -6,9 +7,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "components.h"
 #include "physics_config.h"
-#include "systems/fluid_system.h"
+#include "types.h"
 
 class SoftSoftCollision;
 class RigidSoftCollision;
@@ -86,21 +86,21 @@ struct PhysicsProfileData {
 class PhysicsWorld
 {
 private:
-    // --- Rigid Body ---
+    // ===== Rigid Body =====
     std::vector<RigidBodyComponent> rigid_bodies_;
     std::vector<Vec2> forces_;
-    std::vector<PositionComponent> positions_;
-    std::vector<RotationComponent> rotations_;
+    std::vector<Vec2> positions_;
+    std::vector<float> rotations_;
     std::vector<Rot> rots_;
-    std::vector<LinearVelocityComponent> velocities_;
-    std::vector<AngularVelocityComponent> angular_velocities_;
-    std::vector<PseudoLinearVelocityComponent> pseudo_velocities_;
-    std::vector<PseudoAngularVelocityComponent> pseudo_angular_velocities_;
+    std::vector<Vec2> velocities_;
+    std::vector<float> angular_velocities_;
+    std::vector<Vec2> pseudo_velocities_;
+    std::vector<float> pseudo_angular_velocities_;
     std::vector<Shape> shapes_;
     std::vector<Vec2> vertices_;
     std::vector<Aabb> local_aabbs_;
     
-    // --- XPBD Soft Body ---
+    // ===== XPBD Soft Body =====
     std::vector<SoftBodyHandle> soft_body_handles_;
     ParticleSoAView particle_soa_view_;
     alignas(32) std::vector<Vec2> particle_velocities_;
@@ -119,10 +119,10 @@ private:
     std::vector<Aabb> particle_aabbs_;
     std::vector<Aabb> surface_edge_aabbs_;
     
-    // --- Fluid ---
+    // ===== Fluid =====
     std::vector<Fluid> fluids_;
     
-    // --- Collision ---
+    // ===== Collision =====
     std::vector<BvhNode> bvh_tree_nodes_;
     std::vector<QueryOutput> query_outputs_;
     std::vector<std::pair<uint32_t, uint32_t>> fluid_rigid_pairs_;
@@ -164,19 +164,16 @@ public:
                    float suspension_height, float suspension_mass, float suspension_compliance,
                    float car_body_width, float car_body_height, float car_body_mass, float car_body_restitution, float car_body_friction);
     
-    uint32_t CreateFluid(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density)
+    // ===== Create Fluid =====
+    uint32_t CreateFluid(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density, const float init_smoke)
     {
-        const size_t id = fluids_.size();
-        fluids_.push_back(Fluid(position, inner_nx, inner_ny, cell_size, density));
+        const auto id = fluids_.size();
+        fluids_.push_back(Fluid(position, inner_nx, inner_ny, cell_size, density, init_smoke));
         return id;
     }
     
-    uint32_t CreateFluidRightOpenVortex(const Vec2 position, const int inner_nx, const int inner_ny, const float cell_size, const float density, bool is_horizontal = true, bool is_dir_positive = true)
-    {
-        const auto id = CreateFluid(position, inner_nx, inner_ny, cell_size,density);
-        FluidSystem::SetupRightOpenVortexScene(fluids_[id], 20.f);
-        return id;
-    }
+    uint32_t CreateFluidRightOpenVortex(Vec2 position, int inner_nx, int inner_ny, float cell_size, float density, float init_smoke, float inlet_speed);
+    uint32_t CreateFluidTank(Vec2 position, int inner_nx, int inner_ny, float cell_size, float density, float init_smoke);
     
     void ApplyForce(BodyHandle handle, const Vec2& force);
     void ApplyForceToAll(const Vec2& force);
@@ -185,12 +182,25 @@ public:
     void ClearWorld();
     
     // ===== Rigid Getter =====
-    const std::vector<PositionComponent>& GetPositions() { return positions_; }
+    const std::vector<Vec2>& GetPositions() { return positions_; }
     const std::vector<Rot>& GetRots() { return rots_; }
     const std::vector<Shape>& GetShapes() { return shapes_; }
     const std::vector<Vec2>& GetVertices() { return vertices_; }
-    std::array<Vec2, 4> GetBodyVertices(const BoxShape& box_shape, uint32_t i) const;
-    static std::vector<Vec2> GetBodyVertices(const PolygonShape& polygon_shape, uint32_t i);
+    
+    std::array<Vec2, 4> GetBodyVertices(const BoxShape& box_shape, uint32_t i) const
+    {
+        // Vertices are arranged in clockwise.
+        std::array<Vec2, 4> vertices = {
+            Vec2{-box_shape.half_width, box_shape.half_height}, Vec2{box_shape.half_width, box_shape.half_height},
+            Vec2{box_shape.half_width, -box_shape.half_height}, Vec2{-box_shape.half_width, -box_shape.half_height}
+        };
+
+        std::ranges::transform(vertices, vertices.begin(), [&](const Vec2 v){ return rots_[i].Mul(v) + positions_[i]; });
+
+        return vertices;
+    };
+    
+    static std::vector<Vec2> GetBodyVertices(const PolygonShape& polygon_shape, uint32_t i) {return std::vector<Vec2>{};};
     
     // ===== Soft Getter =====
     const std::vector<SoftBodyHandle>& GetSoftBodyHandles() { return soft_body_handles_; }
@@ -230,8 +240,8 @@ public:
     const std::vector<Manifold>& GetManifolds() { return manifolds_; }
     const std::vector<std::pmr::vector<BvhNode>>& GetLocalBvhs(){return soft_body_surface_particle_bvhs_;}
     
-    void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id].val = pos; }
-    void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id].val = angular_vel; }
+    void SetPosition(const BodyHandle handle, const Vec2& pos) { positions_[handle.id] = pos; }
+    void SetAngularVelocity(const BodyHandle handle, const float angular_vel) { angular_velocities_[handle.id] = angular_vel; }
     void SetRestitution(const BodyHandle handle, const float restitution) { rigid_bodies_[handle.id].restitution = restitution; }
     void SetFriction(const BodyHandle handle, const float friction) { rigid_bodies_[handle.id].friction = friction; }
     void SetParticlePosition(const uint32_t i, const Vec2 pos) { particle_soa_view_.x[i] = pos.x; particle_soa_view_.y[i] = pos.y; }
