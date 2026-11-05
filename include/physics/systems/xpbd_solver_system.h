@@ -15,6 +15,9 @@ private:
     template<std::ranges::input_range R>
     static void SolveParticleEdgeCollisionConstraints(PhysicsWorld& world, R&& batch)
     {
+        // Limit the maximum penetration depth correction per iteration for stability.
+        constexpr float max_penetration_correction = physics_config::kTwoParticlesThickness * 1.1f;
+        
         for (const auto& i : batch)
         {
             const XpbdParticleEdgeCollisionConstraint& c = world.particle_edge_collision_constraint_soa_view_.GetConstraint(i);
@@ -39,7 +42,10 @@ private:
             
             if (w_sum < 1e-6f) continue;
 
-            const float delta_lambda = -violation / w_sum ;
+            // Clamp the penetration depth to prevent excessive correction when particles
+            // have penetrated deeply due to high relative velocity.
+            const float clamped_violation = std::max(violation, -max_penetration_correction);
+            const float delta_lambda = -clamped_violation / w_sum;
 
             // Move particles
             world.PlusEqualParticlePosition(c.body_a_particle_idx, c.normal * (w_p * delta_lambda));
@@ -62,7 +68,7 @@ private:
             Vec2 tangent_dir = rel_dx_tangent / rel_dx_tangent_len;
             
             const float mu = std::sqrt(world.particle_frictions_[c.body_a_particle_idx] * world.particle_frictions_[c.body_b_p1_idx]);
-            const float normal_dx = -violation;
+            const float normal_dx = -clamped_violation;
             const float final_friction = std::min(rel_dx_tangent_len, normal_dx * mu);
 
             const float delta_lambda_t = final_friction / w_sum;

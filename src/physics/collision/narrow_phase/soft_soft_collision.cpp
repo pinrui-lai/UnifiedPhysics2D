@@ -69,10 +69,16 @@ void SoftSoftCollision::UpdateParticleEdgeAabbs(PhysicsWorld& world, const std::
     });
 }
 
-void SoftSoftCollision::CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b, std::span<const Aabb> body_b_edge_aabbs,
-    std::span<const Aabb> body_a_particle_aabbs, const std::span<BvhNode> body_a_surface_particle_bvh, std::vector<XpbdParticleEdgeCollisionConstraint>& out_contacts)
+void SoftSoftCollision::CheckParticleEdgeCollision(const PhysicsWorld& world, const SoftBodyHandle& soft_body_a, const SoftBodyHandle& soft_body_b,
+    std::span<const Aabb> body_b_edge_aabbs, std::span<const Aabb> body_a_particle_aabbs, const std::span<BvhNode> body_a_surface_particle_bvh,
+    std::vector<XpbdParticleEdgeCollisionConstraint>& out_contacts, std::unordered_set<uint32_t>& added_particles)
 {
-    constexpr float total_thickness_sq = physics_config::kTwoParticlesThickness * physics_config::kTwoParticlesThickness;
+    added_particles.clear();
+    
+    // Expand detection distance to account for relative velocity between particles and edge vertices
+    constexpr float total_thickness = physics_config::kTwoParticlesThickness * physics_config::kDetectionExpansion;
+    constexpr float total_thickness_sq = total_thickness * total_thickness;
+    
     const bool is_b_closed = world.surface_edges_[soft_body_b.start_surface_edge_idx + soft_body_b.surface_edge_count - 1].second == 
         world.surface_edges_[soft_body_b.start_surface_edge_idx].first;
     
@@ -92,11 +98,11 @@ void SoftSoftCollision::CheckParticleEdgeCollision(const PhysicsWorld& world, co
         uint32_t stack_ptr = 0;
         stack[stack_ptr++] = 0;
         
-        bool is_found = false;
-        
         auto check_and_add_contact = [&](const uint32_t local_particle_idx) 
         {
             const auto particle_idx = soft_body_a.start_surface_particle_idx + local_particle_idx;
+            if (added_particles.contains(particle_idx)) return;
+            
             const Vec2 particle_pos = world.GetParticlePosition(particle_idx);
 
             float t = (particle_pos - a_pos).Dot(ab) / ab_len_sq;
@@ -128,13 +134,13 @@ void SoftSoftCollision::CheckParticleEdgeCollision(const PhysicsWorld& world, co
             }
 
             out_contacts.emplace_back(normal, particle_idx, fst, snd, t);
-            is_found = true;
+            added_particles.insert(particle_idx);
         };
         
         if (world.use_local_bvh_)
         {
             // Traverse BVH
-            while (stack_ptr > 0 && !is_found)
+            while (stack_ptr > 0)
             {
                 const uint32_t curr = stack[--stack_ptr];
                 const auto& node = body_a_surface_particle_bvh[curr];
@@ -160,7 +166,6 @@ void SoftSoftCollision::CheckParticleEdgeCollision(const PhysicsWorld& world, co
                 if (!Aabb::Overlap(body_a_particle_aabbs[i], body_b_edge_aabbs[j])) continue;
             
                 check_and_add_contact(i);
-                if (is_found) break;
             }
         }
     }
@@ -190,8 +195,9 @@ void SoftSoftCollision::CheckSoftSoftCollision(PhysicsWorld& world, const std::p
     auto fill_contacts = [&](const uint32_t i) 
     {
         thread_local std::vector<XpbdParticleEdgeCollisionConstraint> local_contacts;
+        thread_local std::unordered_set<uint32_t> added_particles;
         local_contacts.clear(); 
-
+        
         const auto& body_a_handle = world.soft_body_handles_[pairs[i].first];
         const auto& body_b_handle = world.soft_body_handles_[pairs[i].second];
         
@@ -202,8 +208,10 @@ void SoftSoftCollision::CheckSoftSoftCollision(PhysicsWorld& world, const std::p
         auto& body_a_surface_particle_bvh = world.soft_body_surface_particle_bvhs_[pairs[i].first];
         auto& body_b_surface_particle_bvh = world.soft_body_surface_particle_bvhs_[pairs[i].second];
         
-        CheckParticleEdgeCollision(world, body_a_handle, body_b_handle, b_edge_aabbs, a_particle_aabbs, body_a_surface_particle_bvh, local_contacts);
-        CheckParticleEdgeCollision(world, body_b_handle, body_a_handle, a_edge_aabbs, b_particle_aabbs, body_b_surface_particle_bvh, local_contacts);
+        CheckParticleEdgeCollision(world, body_a_handle, body_b_handle, b_edge_aabbs, a_particle_aabbs,
+            body_a_surface_particle_bvh, local_contacts, added_particles);
+        CheckParticleEdgeCollision(world, body_b_handle, body_a_handle, a_edge_aabbs, b_particle_aabbs,
+            body_b_surface_particle_bvh, local_contacts, added_particles);
 
         if (local_contacts.empty()) return;
         

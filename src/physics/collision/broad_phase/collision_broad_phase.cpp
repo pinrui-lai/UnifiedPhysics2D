@@ -6,6 +6,8 @@
 
 void CollisionBroadPhase::BuildGlobalBvh(PhysicsWorld& world, std::span<Aabb> world_space_aabbs)
 {
+    constexpr float total_thickness = physics_config::kTwoParticlesThickness * physics_config::kDetectionExpansion;
+    
     const uint32_t rigid_count = world.positions_.size();
     const uint32_t soft_count = world.soft_body_handles_.size();
     
@@ -52,8 +54,8 @@ void CollisionBroadPhase::BuildGlobalBvh(PhysicsWorld& world, std::span<Aabb> wo
         }
 
          world_space_aabbs[idx] = {
-            min_x - physics_config::kTwoParticlesThickness, min_y - physics_config::kTwoParticlesThickness,
-            max_x + physics_config::kTwoParticlesThickness, max_y + physics_config::kTwoParticlesThickness};
+            min_x - total_thickness, min_y - total_thickness,
+            max_x + total_thickness, max_y + total_thickness};
     });
     
     // Get Scene Bounding Box (boundary of all bodies in the world).
