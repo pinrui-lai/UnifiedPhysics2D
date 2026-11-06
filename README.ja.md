@@ -96,7 +96,7 @@ Broad Phase ではソフトボディ全体の AABB を用いてグローバル B
 
 <table>
   <tr>
-    <th colspan="3">Soft Circle Stress Test / 68 Soft Circles / 6800 particles / ≈ 165 soft-soft pairs / ≈ 1200 particle-edge contacts / CPU: AMD R5 5600</th>
+    <th colspan="3">Soft Circle Stress Test / 68 Soft Circles / 6800 particles / ≈ 165 soft-soft pairs / ≈ 4350 particle-edge contacts / CPU: AMD R5 5600</th>
   </tr>
   <tr>
     <th>Soft-Soft Detection</th>
@@ -105,13 +105,13 @@ Broad Phase ではソフトボディ全体の AABB を用いてグローバル B
   </tr>
   <tr>
     <th>Local BVH</th>
-    <th>≈ 0.75ms</th>
-    <th>≈ 2.90ms</th>
+    <th>≈ 0.91ms</th>
+    <th>≈ 3.18ms</th>
   </tr>
   <tr>
     <th>Brute Force</th>
-    <th>≈ 1.47ms</th>
-    <th>≈ 8.30ms</th>
+    <th>≈ 2.35ms</th>
+    <th>≈ 13.50ms</th>
   </tr>
 </table>
 
@@ -119,17 +119,17 @@ Broad Phase ではソフトボディ全体の AABB を用いてグローバル B
 
 ### 1. GJK の無限ループによる物理シミュレーションのフリーズ
 
-**原因の調査・分析**
+#### 原因の調査・分析
 
 ステップトレースによる調査の結果、特定の衝突ケース（2つの Box の辺がぴったり接している）において、Simplex の辺長が極端に小さくなること（退化）で、次の探索方向ベクトル（Search Direction）の大きさが微小値となり、浮動小数点演算の精度限界による数値的不安定性が発生することを確認した。その結果、探索方向が適切に更新されず、GJK が無限ループに陥り、物理シミュレーション全体がフリーズする問題が発生していた。
 
-**解決策**
+#### 解決策
 
 epsilonによる閾値チェックを導入し、探索方向ベクトルの大きさが閾値を下回った場合にフォールバック処理で反復を強制終了することで、シミュレーションの安定性を向上。
 
 ### 2. Box Stacking の不安定
 
-**原因の調査・分析**
+#### 原因の調査・分析
 
 自作の ImGui デバッグパネルを実装で Contact Normal（接触法線）および Incident Edge / Reference Edge（入射辺／基準辺）をリアルタイムで可視化して、衝突検出処理を解析した。
 
@@ -137,13 +137,25 @@ epsilonによる閾値チェックを導入し、探索方向ベクトルの大�
 
 さらに、誤った接触法線は Clipping 処理にも影響し、入射辺と基準辺の選択を誤らせていた。その結果、現フレームの Feature ID が前フレームのものと正しく一致せず、対応する接触点の衝撃インパルスの引き継ぎができず、スタッキングが不安定になっていた。
 
-**解決策**
+#### 解決策
+
 同上、Simplex が退化した場合にフォールバック処理を適用し、Contact Info の計算精度を確保する。
+
+### 3. ソフトボディ同士の衝突における稀発的な潰れ・絡まり
+
+#### 原因の調査・分析
+
+問題の再現検証を行った結果、複数のソフトボディが高密度かつ高速で衝突する状況（多数のロープが重なり合い、相互に衝突するケースなど）において、ソフトボディの潰れや絡まりが発生しやすいことを確認した。
+根本原因は、近接して密集した多数のソフトボディ間で、貫通が発生することにある。
+
+#### 解決策
+粒子–エッジ間の衝突判定距離を拡大し、現在は接触していないものの、その後の XPBD 反復計算における他の拘束解法によって接触する可能性のある衝突候補ペアも、衝突判定の対象に含める。
+これにより、拘束解法によっで新たに生じた貫通を検出し、適切に解決できるようにする。
 
 <table>
   <tr>
     <th>Contact Info</th>
-    <th>Spawn Bodies / Apply a force to left</th>
+    <th>Spawn Bodies / Apply a force to left / Simple Fluid Sim</th>
   </tr>
   <tr>
     <td width="55%">
@@ -152,7 +164,8 @@ epsilonによる閾値チェックを導入し、探索方向ベクトルの大�
     <td>
       <img src="assets/Spawn.gif" alt="Spawn.gif">
       <img src="assets/SoftDemo.gif" alt="SoftDemo.gif">
-    </td">
+      <img src="assets/Fluid.gif" alt="Fluid.gif">
+    </td>
   </tr>
 </table>
 

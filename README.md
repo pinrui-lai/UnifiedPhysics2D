@@ -96,7 +96,7 @@ The following table shows the performance results for the **Soft Circle Stress T
 
 <table>
   <tr>
-    <th colspan="3">Soft Circle Stress Test / 68 Soft Circles / 6800 particles / ≈ 165 soft-soft pairs / ≈ 1200 particle-edge contacts / CPU: AMD R5 5600</th>
+    <th colspan="3">Soft Circle Stress Test / 68 Soft Circles / 6800 particles / ≈ 165 soft-soft pairs / ≈ 4350 particle-edge contacts / CPU: AMD R5 5600</th>
   </tr>
   <tr>
     <th>Soft-Soft Detection</th>
@@ -105,13 +105,13 @@ The following table shows the performance results for the **Soft Circle Stress T
   </tr>
   <tr>
     <th>Local BVH</th>
-    <th>≈ 0.75ms</th>
-    <th>≈ 2.90ms</th>
+    <th>≈ 0.91ms</th>
+    <th>≈ 3.18ms</th>
   </tr>
   <tr>
     <th>Brute Force</th>
-    <th>≈ 1.47ms</th>
-    <th>≈ 8.30ms</th>
+    <th>≈ 2.35ms</th>
+    <th>≈ 13.50ms</th>
   </tr>
 </table>
 
@@ -141,10 +141,20 @@ The incorrect contact normal also affected clipping, causing the engine to selec
 
 Applied the same fallback strategy used for the GJK infinite-loop issue when the simplex becomes degenerate, ensuring the accuracy of the resulting contact information.
 
+### 3. Rare Collapse and Entanglement in Soft-Body Collisions
+
+#### Investigation and Root Cause
+
+After reproducing the issue, Found that collapse and entanglement tend to occur when multiple soft bodies undergo dense, high-speed collisions (e.g., numerous ropes overlapping and colliding). The root cause is penetration between numerous closely packed bodies.
+
+#### Solution
+
+Increase the particle–edge collision detection distance to include potential collision pairs that are not currently in contact but may come into contact as a result of solving other constraints in subsequent XPBD iterations. This allows penetrations introduced by constraint solving to be detected and resolved.
+
 <table>
   <tr>
     <th>Contact Info</th>
-    <th>Spawn Bodies / Apply a force to left</th>
+    <th>Spawn Bodies / Apply a force to left / Simple Fluid Sim</th>
   </tr>
   <tr>
     <td width="55%">
@@ -153,7 +163,8 @@ Applied the same fallback strategy used for the GJK infinite-loop issue when the
     <td>
       <img src="assets/Spawn.gif" alt="Spawn.gif">
       <img src="assets/SoftDemo.gif" alt="SoftDemo.gif">
-    </td">
+      <img src="assets/Fluid.gif" alt="Fluid.gif">
+    </td>
   </tr>
 </table>
 
